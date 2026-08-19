@@ -1,4 +1,6 @@
-export async function apiFetch(url: string, token: string | null, options: RequestInit = {}) {
+export async function apiFetch(path: string, token: string | null, options: RequestInit = {}) {
+  const baseUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || '';
+  const url = baseUrl ? `${baseUrl}${path}` : path;
   const headers = new Headers(options.headers || {});
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);

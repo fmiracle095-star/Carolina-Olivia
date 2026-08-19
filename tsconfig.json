@@ -10,7 +10,7 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
-    "types": ["vite/client"],
+    "types": [],
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
@@ -22,6 +22,31 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "noEmit": true,
+    "strict": false,
+    "incremental": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.mts",
+    "**/*.ts",
+    "**/*.tsx",
+    "dist/types/**/*.ts",
+    "dist/dev/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "gateway",
+    "dist",
+    ".next"
+  ]
 }
