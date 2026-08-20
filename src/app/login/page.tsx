@@ -76,7 +76,7 @@ export default function Login() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Secure Passkey</label>
+            <div className="flex justify-between items-center"><label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Secure Passkey</label><Link href="/forgot-password" className="text-[10px] text-cyan-500 hover:text-cyan-400 font-bold uppercase transition-colors">Forgot Passkey?</Link></div>
             <input
               type="password"
               required
