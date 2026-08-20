@@ -1,76 +1,48 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { User, Shield, ArrowLeft, Save, Activity, CheckCircle } from 'lucide-react';
-import { createClient } from '@/src/lib/supabase/client';
+import { useAuth } from '@/src/lib/AuthContext';
 
-export default function Profile() {
+import { Providers } from "@/src/components/Providers";
+
+export default function ProfileWrapper() {
+  return <Providers><Profile /></Providers>;
+}
+
+function Profile() {
   const [profile, setProfile] = useState<any>(null);
-  const [name, setName] = useState('');
-  const [updating, setUpdating] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  
   const router = useRouter();
-  const supabase = createClient();
+  const { supabase, session, user, loading } = useAuth();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data, error }) => {
+    if (!loading) {
+      if (!user) {
+        router.push('/login');
+      } else {
+        supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data, error }: any) => {
           if (data) {
             setProfile(data);
-            setName(data.name || '');
           } else {
-            // Fallback profile if row doesn't exist yet
-            const fallback = { id: user.id, name: user.user_metadata?.name || 'Operator Delta', email: user.email };
-            setProfile(fallback);
-            setName(fallback.name);
+            setProfile({
+              id: user.id,
+              name: user.user_metadata?.name || 'Operator',
+              email: user.email,
+              created_at: user.created_at
+            });
           }
+          setProfileLoading(false);
         });
-      } else {
-        router.push('/login');
       }
-    });
-  }, [router, supabase]);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (updating) return;
-    setUpdating(true);
-    setStatus(null);
-
-    try {
-      const { error } = await supabase.from('profiles').upsert({
-        id: profile.id,
-        name,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      setStatus('Profile sequence successfully synchronized.');
-      setProfile(prev => ({ ...prev, name }));
-    } catch (err: any) {
-      // If table doesn't support profiles updates directly or profile table is missing,
-      // update auth metadata instead as a valid runtime fallback
-      const { error: authError } = await supabase.auth.updateUser({
-        data: { name }
-      });
-      if (authError) {
-        setStatus(`Error synchronizing parameters: ${authError.message}`);
-      } else {
-        setStatus('Profile parameters updated successfully in metadata.');
-        setProfile(prev => ({ ...prev, name }));
-      }
-    } finally {
-      setUpdating(false);
     }
-  };
+  }, [loading, user, router, supabase]);
 
-  if (!profile) {
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-[#020205] text-slate-300 flex items-center justify-center font-mono">
         <Activity className="w-8 h-8 text-cyan-500 animate-spin" />
@@ -107,57 +79,37 @@ export default function Profile() {
             </div>
           </div>
 
-          {status && (
-            <div className="p-3.5 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-xs text-cyan-400 font-bold flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{status}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSave} className="space-y-6">
+          <div className="space-y-6">
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Operator ID Reference</label>
               <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-500 font-mono select-all">
-                {profile.id}
+                {profile?.id}
               </div>
             </div>
-
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Operator Call-Sign (Name)</label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500/50 transition-all font-mono"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Secure Comms Routing (Email)</label>
-              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-500 font-mono">
-                {profile.email || 'N/A'}
+              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-300 font-mono">
+                {profile?.name}
               </div>
             </div>
-
-            <button
-              type="submit"
-              disabled={updating}
-              className="w-full py-3 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/20 text-black font-bold text-xs tracking-widest uppercase transition-all flex items-center justify-center gap-2 hover:scale-[1.01] cursor-pointer"
-            >
-              {updating ? (
-                <>
-                  <Activity className="w-4 h-4 animate-spin" />
-                  SYNCHRONIZING PATH...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  SYNCHRONIZE OPERATOR PARAMETERS
-                </>
-              )}
-            </button>
-          </form>
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Secure Comms Routing (Email)</label>
+              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-300 font-mono">
+                {profile?.email || 'N/A'}
+              </div>
+            </div>
+            {profile?.created_at && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Join Date</label>
+              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-300 font-mono">
+                {new Date(profile.created_at).toLocaleString()}
+              </div>
+            </div>
+            )}
+            <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-xs text-cyan-400">
+              Editing operator parameters is currently locked pending infrastructure validation.
+            </div>
+          </div>
         </motion.div>
       </main>
     </div>

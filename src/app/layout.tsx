@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@/src/index.css";
+import React from 'react';
 
 export const metadata: Metadata = {
   title: "Carolina Olivia AI Portal",

@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -7,31 +8,41 @@ import {
   User, Shield, Terminal, Database, Activity, Cpu, 
   LogOut, ArrowRight, Settings
 } from 'lucide-react';
-import { createClient } from '@/src/lib/supabase/client';
+import { useAuth } from '@/src/lib/AuthContext';
 
-export default function Dashboard() {
+import { Providers } from "@/src/components/Providers";
+
+export default function DashboardWrapper() {
+  return <Providers><Dashboard /></Providers>;
+}
+
+function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
+  const { supabase, session, user, loading, isOwner } = useAuth();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data }) => {
-          setProfile(data);
-        });
-      } else {
+    if (!loading) {
+      if (!user) {
         router.push('/login');
+      } else {
+        supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data, error }: any) => {
+          if (data) {
+            setProfile(data);
+          }
+          setProfileLoading(false);
+        });
       }
-    });
-  }, [router, supabase]);
+    }
+  }, [loading, user, router, supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
   };
 
-  if (!profile) {
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-[#020205] text-slate-300 flex items-center justify-center font-mono">
         <Activity className="w-8 h-8 text-cyan-500 animate-spin" />
@@ -49,7 +60,7 @@ export default function Dashboard() {
       bg: 'bg-cyan-500/10',
       border: 'border-cyan-500/30'
     },
-    {
+    ...(isOwner ? [{
       title: 'Melly Core',
       description: 'Access the primary conversational AI module and command terminal.',
       icon: Terminal,
@@ -57,7 +68,7 @@ export default function Dashboard() {
       color: 'text-magenta-400',
       bg: 'bg-magenta-500/10',
       border: 'border-magenta-500/30'
-    },
+    }] : []),
     {
       title: 'Security',
       description: 'Review access logs, manage cryptographic keys, and firewall rules.',
@@ -107,7 +118,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div className="text-xs text-slate-400 hidden sm:block">
-            Operator: <span className="text-white font-bold">{profile.name}</span>
+            Operator: <span className="text-white font-bold">{profile?.name || user?.email || 'UNKNOWN'}</span>
           </div>
           <button 
             onClick={handleLogout}
@@ -121,9 +132,9 @@ export default function Dashboard() {
 
       <main className="flex-1 p-8 relative z-10 max-w-7xl mx-auto w-full">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          className="mb-12"
+           initial={{ opacity: 0, y: 20 }}
+           animate={{ opacity: 1, y: 0 }}
+           className="mb-12"
         >
           <h1 className="text-4xl font-bold tracking-widest text-white mb-2 uppercase">Operational Sectors</h1>
           <p className="text-slate-400 text-sm">Select a module to initiate access sequence.</p>
@@ -153,8 +164,8 @@ export default function Dashboard() {
                   </div>
                   
                   <Link 
-                    href={sector.href} 
-                    className={`inline-flex items-center text-xs ${sector.color} uppercase tracking-widest font-bold hover:brightness-125 transition-all w-fit`}
+                     href={sector.href}
+                     className={`inline-flex items-center text-xs ${sector.color} uppercase tracking-widest font-bold hover:brightness-125 transition-all w-fit`}
                   >
                     Access {sector.title} <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>

@@ -1,6 +1,8 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Carolina Olivia AI Portal",
+  "description": "Year 2050 Operations Interface and Carolina Gateway",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
