@@ -30,23 +30,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   React.useEffect(() => {
     let mounted = true;
 
-    async function checkOwnerStatus(token: string) {
+    async function checkOwnerStatus(token: string, currentUserId: string | undefined) {
       try {
         const url = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://carolina-gateway.vercel.app';
-        const res = await fetch(`${url}/api/v1/system/status`, {
+        const targetEndpoint = `${url}/api/v1/system/status`;
+        console.log(`[OWNER-AUTH] Calling Gateway URL: ${targetEndpoint}`);
+        if (currentUserId) {
+          console.log(`[OWNER-AUTH] Authenticated Supabase user.id: ${currentUserId}`);
+        }
+
+        const res = await fetch(targetEndpoint, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
+
+        console.log(`[OWNER-AUTH] HTTP Response Status: ${res.status}`);
+
         if (res.ok) {
           const data = await res.json();
+          console.log(`[OWNER-AUTH] Response JSON:`, JSON.stringify(data));
+          console.log(`[OWNER-AUTH] Returned data.isOwner: ${!!data.isOwner}`);
+          
           if (mounted) {
             setIsOwner(!!data.isOwner);
           }
         } else {
+          console.error(`[OWNER-AUTH] Request failed with status ${res.status}`);
           if (mounted) setIsOwner(false);
         }
       } catch (err) {
+        console.error(`[OWNER-AUTH] Request threw an error:`, err);
         if (mounted) setIsOwner(false);
       }
     }
@@ -57,7 +71,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         setLoading(false);
         if (session?.access_token) {
-          checkOwnerStatus(session.access_token);
+          checkOwnerStatus(session.access_token, session?.user?.id);
+        } else {
+          setIsOwner(false);
         }
       }
     });
@@ -67,7 +83,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.access_token) {
-          checkOwnerStatus(session.access_token);
+          checkOwnerStatus(session.access_token, session?.user?.id);
         } else {
           setIsOwner(false);
         }
