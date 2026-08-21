@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   MessageSquare, 
   Cpu, 
@@ -42,15 +43,20 @@ export const ownerToolsList = [
 ];
 
 export function OwnerSidebar({ activeTab, setActiveTab, mobileOpen, setMobileOpen }: OwnerSidebarProps) {
-  const content = (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 w-72">
+  const renderContent = (isMobile: boolean) => (
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 w-72 max-w-[85vw]">
       <div className="p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
         <div>
           <h2 className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100">Owner Tools</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">Overseer Control Plane</p>
         </div>
-        {setMobileOpen && (
-          <button className="lg:hidden p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white" onClick={() => setMobileOpen(false)}>
+        {isMobile && setMobileOpen && (
+          <button 
+            id="close-owner-sidebar-btn"
+            aria-label="Close Owner Tools"
+            className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" 
+            onClick={() => setMobileOpen(false)}
+          >
             <X className="w-5 h-5" />
           </button>
         )}
@@ -100,9 +106,39 @@ export function OwnerSidebar({ activeTab, setActiveTab, mobileOpen, setMobileOpe
 
   return (
     <>
-      <div className="hidden lg:block h-screen fixed inset-y-0 right-0 z-40">
-        {content}
-      </div>
+      {/* Desktop Persistent Sidebar */}
+      <aside className="hidden lg:block h-screen fixed inset-y-0 right-0 z-40 w-72">
+        {renderContent(false)}
+      </aside>
+
+      {/* Mobile Right Drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              key="owner-sidebar-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setMobileOpen?.(false)}
+              className="lg:hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50"
+              aria-hidden="true"
+            />
+            <motion.aside
+              key="owner-sidebar-drawer"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="lg:hidden fixed inset-y-0 right-0 z-50 h-full w-72 max-w-[85vw] shadow-2xl flex flex-col"
+            >
+              {renderContent(true)}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }
+

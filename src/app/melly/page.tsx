@@ -275,32 +275,13 @@ function MellyContent() {
         )}
       </div>
 
-      {/* Right Owner Sidebar (Desktop) */}
-      <OwnerSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* Right Owner Sidebar Mobile Drawer */}
-      <AnimatePresence>
-        {rightMobileOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setRightMobileOpen(false)}
-              className="lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40"
-            />
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className="lg:hidden fixed inset-y-0 right-0 z-50 shadow-2xl"
-            >
-              <OwnerSidebar activeTab={activeTab} setActiveTab={setActiveTab} mobileOpen={rightMobileOpen} setMobileOpen={setRightMobileOpen} />
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Right Owner Sidebar (Desktop + Mobile Drawer) */}
+      <OwnerSidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        mobileOpen={rightMobileOpen} 
+        setMobileOpen={setRightMobileOpen} 
+      />
     </div>
   );
 }

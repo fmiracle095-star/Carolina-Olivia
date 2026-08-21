@@ -31,14 +31,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       
       <div className="flex-1 flex flex-col md:pl-64 h-screen">
-        <header className="md:hidden h-14 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 bg-white dark:bg-slate-950">
+        <header className="md:hidden h-14 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 bg-white dark:bg-slate-950 shrink-0 z-30">
           <button 
+            id="mobile-nav-toggle-btn"
+            aria-label="Open navigation menu"
             onClick={() => setMobileOpen(true)}
-            className="p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+            className="p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="font-semibold ml-2">Carolina</div>
+          <div className="font-semibold ml-2 text-slate-900 dark:text-slate-100">Carolina</div>
         </header>
 
         <main className="flex-1 overflow-hidden relative">
