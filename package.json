@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "npm test --prefix gateway"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

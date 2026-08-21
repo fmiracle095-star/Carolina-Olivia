@@ -95,7 +95,7 @@ export class BaselineProviderAdapter implements ProviderAdapter {
 
     // 7. Conversational: What can you do / Capabilities / Help
     if (/^(help|help\s+me)$/i.test(normalized) ||
-        /^(what\s+can\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+carolina\s+do|what\s+can\s+you\s+help\s+(?:me\s+)?with|how\s+can\s+you\s+help(?:\s+me)?|what\s+can\s+i\s+ask\s+you)\??$/i.test(normalized) ||
+        /^(what\s+can\s+(?:you|carolina)\s+(?:do|help(?:\s+me)?(?:\s+with)?)|what\s+are\s+your\s+capabilities|how\s+can\s+(?:you|carolina)\s+help(?:\s+me)?|what\s+can\s+i\s+ask\s+(?:you|carolina))\??$/i.test(normalized) ||
         /^(?:show|list|tell\s+me)\s+(?:me\s+)?(?:your\s+)?capabilities\??$/i.test(normalized)) {
       return "I can help with basic conversation, calculations, date and time, system information, and other supported requests.";
     }
