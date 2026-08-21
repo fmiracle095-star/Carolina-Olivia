@@ -1,26 +1,22 @@
 'use client';
 
+import React from 'react';
+import { Providers } from "@/src/components/Providers";
+import { AppShell } from "@/src/components/layout/AppShell";
 import { useAuth } from '@/src/lib/AuthContext';
 import { useRouter } from 'next/navigation';
-import { Activity, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
 import NotFound from '@/src/app/not-found';
 import { motion } from 'motion/react';
+import { Cpu, Activity } from 'lucide-react';
 
-import { Providers } from "@/src/components/Providers";
-
-export default function MellyWrapper() {
-  return <Providers><Melly /></Providers>;
-}
-
-function Melly() {
-  const { loading, user, isOwner } = useAuth();
+function MellyContent() {
+  const { isOwner, user, loading } = useAuth();
   const router = useRouter();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#020205] text-slate-300 flex items-center justify-center font-mono">
-        <Activity className="w-8 h-8 text-magenta-500 animate-spin" />
+      <div className="flex-1 flex items-center justify-center h-full">
+        <Activity className="w-8 h-8 text-indigo-500 animate-spin" />
       </div>
     );
   }
@@ -35,32 +31,38 @@ function Melly() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020205] text-slate-300 font-mono relative overflow-hidden flex flex-col">
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
-      
-      <nav className="relative z-10 w-full bg-black/80 border-b border-white/10 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-all">
-            <ArrowLeft className="w-4 h-4" />
-            RETURN
-          </Link>
-          <div className="w-3 h-3 rounded-full bg-magenta-500 shadow-[0_0_10px_rgba(236,72,153,0.8)] ml-4" />
-          <span className="text-white font-bold tracking-widest uppercase">Melly Control Center</span>
-        </div>
-      </nav>
-
-      <main className="flex-1 p-8 relative z-10 max-w-4xl mx-auto w-full flex flex-col items-center justify-center">
-        <motion.div 
-           initial={{ opacity: 0, y: 20 }}
-           animate={{ opacity: 1, y: 0 }}
-           className="w-full bg-black/40 border border-white/10 rounded-2xl p-8 space-y-6 text-center backdrop-blur-md"
+    <div className="flex-1 h-full overflow-y-auto px-4 lg:px-8 py-8 bg-white dark:bg-slate-950">
+      <div className="max-w-3xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-10 max-w-lg w-full shadow-sm"
         >
-          <h2 className="text-2xl font-bold tracking-widest text-magenta-400 uppercase">Awaiting Gateway Integration</h2>
-          <p className="text-slate-400 text-sm">
-            The Melly conversational module is actively synchronizing with the Carolina Gateway. Secure communications channel establishment is pending full provider credential provisioning.
+          <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Cpu className="w-10 h-10 text-indigo-500" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Melly Core Configurator</h1>
+          <p className="text-slate-500 dark:text-slate-400">
+            The Melly conversational module is actively synchronizing. Secure communications channel establishment is pending full provider credential provisioning.
           </p>
+          <div className="mt-8 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+            <p className="text-sm text-amber-700 dark:text-amber-400 font-medium flex items-center justify-center gap-2">
+              <Activity className="w-4 h-4" />
+              Owner Privileges Verified
+            </p>
+          </div>
         </motion.div>
-      </main>
+      </div>
     </div>
+  );
+}
+
+export default function MellyWrapper() {
+  return (
+    <Providers>
+      <AppShell>
+        <MellyContent />
+      </AppShell>
+    </Providers>
   );
 }

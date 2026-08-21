@@ -1,117 +1,100 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { motion } from 'motion/react';
-import { User, Shield, ArrowLeft, Save, Activity, CheckCircle } from 'lucide-react';
-import { useAuth } from '@/src/lib/AuthContext';
-
+import React, { useEffect, useState } from 'react';
 import { Providers } from "@/src/components/Providers";
+import { AppShell } from "@/src/components/layout/AppShell";
+import { useAuth } from '@/src/lib/AuthContext';
+import { User, Activity } from 'lucide-react';
+import { motion } from 'motion/react';
 
-export default function ProfileWrapper() {
-  return <Providers><Profile /></Providers>;
-}
-
-function Profile() {
+function ProfileContent() {
   const [profile, setProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  
-  const router = useRouter();
-  const { supabase, session, user, loading } = useAuth();
+  const { supabase, user } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.push('/login');
-      } else {
-        supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data, error }: any) => {
-          if (data) {
-            setProfile(data);
-          } else {
-            setProfile({
-              id: user.id,
-              name: user.user_metadata?.name || 'Operator',
-              email: user.email,
-              created_at: user.created_at
-            });
-          }
-          setProfileLoading(false);
-        });
-      }
+    if (user) {
+      supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data }: any) => {
+        if (data) {
+          setProfile(data);
+        } else {
+          setProfile({
+            id: user.id,
+            name: user.user_metadata?.name || 'Operator',
+            email: user.email,
+            created_at: user.created_at
+          });
+        }
+        setProfileLoading(false);
+      });
     }
-  }, [loading, user, router, supabase]);
+  }, [user, supabase]);
 
-  if (loading || profileLoading) {
+  if (profileLoading) {
     return (
-      <div className="min-h-screen bg-[#020205] text-slate-300 flex items-center justify-center font-mono">
-        <Activity className="w-8 h-8 text-cyan-500 animate-spin" />
+      <div className="flex-1 flex items-center justify-center h-full">
+        <Activity className="w-8 h-8 text-indigo-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020205] text-slate-300 font-mono relative overflow-hidden flex flex-col">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f293705_1px,transparent_1px),linear-gradient(to_bottom,#1f293705_1px,transparent_1px)] bg-[size:4rem_4rem]" />
-      
-      <nav className="relative z-10 w-full bg-black/60 border-b border-white/10 px-6 py-4 flex justify-between items-center backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-all">
-            <ArrowLeft className="w-4 h-4" />
-            RETURN TO OPERATIONAL SECTORS
-          </Link>
-        </div>
-      </nav>
-
-      <main className="flex-1 max-w-2xl w-full mx-auto p-6 md:p-8 relative z-10 flex flex-col justify-center">
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
+    <div className="flex-1 h-full overflow-y-auto px-4 lg:px-8 py-8 bg-white dark:bg-slate-950">
+      <div className="max-w-3xl mx-auto space-y-8">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Identity & Profile</h1>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-black/60 border border-white/10 rounded-2xl p-8 space-y-6 backdrop-blur-md"
+          className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 lg:p-8 shadow-sm"
         >
-          <div className="flex items-center gap-4 border-b border-white/10 pb-6">
-            <div className="w-14 h-14 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-              <User className="w-7 h-7 text-cyan-400" />
+          <div className="flex items-center gap-6 pb-8 border-b border-slate-200 dark:border-slate-800 mb-8">
+            <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-100 dark:border-indigo-500/20">
+              <User className="w-10 h-10 text-indigo-500" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-widest text-white uppercase">Operator Parameters</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Identity Core Config</p>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{profile?.name}</h2>
+              <p className="text-slate-500">{profile?.email}</p>
             </div>
           </div>
-
+          
           <div className="space-y-6">
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Operator ID Reference</label>
-              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-500 font-mono select-all">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">User ID</label>
+              <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 text-sm font-mono text-slate-600 dark:text-slate-400 break-all select-all">
                 {profile?.id}
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Operator Call-Sign (Name)</label>
-              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-300 font-mono">
-                {profile?.name}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Secure Comms Routing (Email)</label>
-              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-300 font-mono">
-                {profile?.email || 'N/A'}
-              </div>
-            </div>
+            
             {profile?.created_at && (
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Join Date</label>
-              <div className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2.5 text-xs text-slate-300 font-mono">
-                {new Date(profile.created_at).toLocaleString()}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Account Created</label>
+                <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-400">
+                  {new Date(profile.created_at).toLocaleDateString(undefined, {
+                    year: 'numeric', month: 'long', day: 'numeric'
+                  })}
+                </div>
               </div>
-            </div>
             )}
-            <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-xs text-cyan-400">
-              Editing operator parameters is currently locked pending infrastructure validation.
+            
+            <div className="mt-8 p-4 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 rounded-xl">
+              <p className="text-sm text-indigo-600 dark:text-indigo-400 font-medium">
+                Identity editing is currently disabled while system integration is ongoing.
+              </p>
             </div>
           </div>
         </motion.div>
-      </main>
+      </div>
     </div>
+  );
+}
+
+export default function ProfileWrapper() {
+  return (
+    <Providers>
+      <AppShell>
+        <ProfileContent />
+      </AppShell>
+    </Providers>
   );
 }
