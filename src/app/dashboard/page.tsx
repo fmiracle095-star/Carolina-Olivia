@@ -9,7 +9,6 @@ import {
   LogOut, ArrowRight, Settings
 } from 'lucide-react';
 import { useAuth } from '@/src/lib/AuthContext';
-
 import { Providers } from "@/src/components/Providers";
 
 export default function DashboardWrapper() {
@@ -20,7 +19,8 @@ function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const router = useRouter();
-  const { supabase, session, user, loading, isOwner } = useAuth();
+
+  const { supabase, session, user, loading, isOwner, diagnostic } = useAuth();
 
   useEffect(() => {
     if (!loading) {
@@ -131,14 +131,42 @@ function Dashboard() {
       </nav>
 
       <main className="flex-1 p-8 relative z-10 max-w-7xl mx-auto w-full">
-        <motion.div 
-           initial={{ opacity: 0, y: 20 }}
-           animate={{ opacity: 1, y: 0 }}
+        <motion.div
+            initial={{ opacity: 0, y: 20 }} 
+           animate={{ opacity: 1, y: 0 }} 
            className="mb-12"
         >
           <h1 className="text-4xl font-bold tracking-widest text-white mb-2 uppercase">Operational Sectors</h1>
           <p className="text-slate-400 text-sm">Select a module to initiate access sequence.</p>
         </motion.div>
+
+        {diagnostic && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-8 bg-black/60 border border-cyan-500/30 rounded-xl p-6 text-xs text-slate-300 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-[50px] rounded-full pointer-events-none" />
+            <h2 className="text-cyan-400 font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Owner Authorization Diagnostic
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div><span className="text-slate-500 font-bold">GATEWAY URL:</span> <span className="text-white">{diagnostic.gatewayUrl}</span></div>
+                <div><span className="text-slate-500 font-bold">USER ID:</span> <span className="text-white">{diagnostic.userId}</span></div>
+                <div><span className="text-slate-500 font-bold">HTTP STATUS:</span> <span className={diagnostic.httpStatus === 200 ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>{diagnostic.httpStatus}</span></div>
+                <div><span className="text-slate-500 font-bold">EVALUATION:</span> <span className={isOwner ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>OWNER: {isOwner ? 'YES' : 'NO'}</span></div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-slate-500 font-bold">RAW RESPONSE:</span>
+                <pre className="bg-black/80 border border-white/5 rounded p-3 text-cyan-200 overflow-x-auto whitespace-pre-wrap max-h-32">
+                  {diagnostic.rawResponse}
+                </pre>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sectors.map((sector, index) => {
@@ -164,8 +192,8 @@ function Dashboard() {
                   </div>
                   
                   <Link 
-                     href={sector.href}
-                     className={`inline-flex items-center text-xs ${sector.color} uppercase tracking-widest font-bold hover:brightness-125 transition-all w-fit`}
+                    href={sector.href}
+                    className={`inline-flex items-center text-xs ${sector.color} uppercase tracking-widest font-bold hover:brightness-125 transition-all w-fit`}
                   >
                     Access {sector.title} <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>
