@@ -29,7 +29,10 @@ export async function verifySupabaseToken(token: string): Promise<SupabaseJwtPay
     if (payload && payload.sub) {
       return payload;
     }
-  } catch (localErr) {
+  } catch (localErr: any) {
+    if (localErr?.name === 'TokenExpiredError') {
+      throw localErr;
+    }
     // Fall back to Supabase Auth API verification for asymmetric tokens (ES256/RS256)
   }
 

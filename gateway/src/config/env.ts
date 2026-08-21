@@ -12,6 +12,9 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().length(64).regex(/^[0-9a-fA-F]+$/).default('a'.repeat(64)),
   TERMUX_AUTH_SECRET: z.string().min(16).default('placeholder-termux-secret-12345'),
   FRONTEND_ORIGIN: z.string().optional(),
+  GROK_API: z.string().optional().default(''),
+  GROK_API_KEY: z.string().optional().default(''),
+  XAI_API_KEY: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -21,4 +24,9 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+export const env = {
+  ...parsed.data,
+  getGrokApiKey: (): string => {
+    return process.env.GROK_API || process.env.GROK_API_KEY || process.env.XAI_API_KEY || parsed.data.GROK_API || parsed.data.GROK_API_KEY || parsed.data.XAI_API_KEY || '';
+  }
+};

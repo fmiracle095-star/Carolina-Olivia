@@ -2,28 +2,85 @@ import React, { useState } from 'react';
 import { ChatHeader } from './ChatHeader';
 import { ChatComposer } from './ChatComposer';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Activity } from 'lucide-react';
+import { Sparkles, Activity, Loader2 } from 'lucide-react';
 import { useAuth } from '@/src/lib/AuthContext';
+import { apiFetch } from '@/src/lib/api';
 
 export function ChatWorkspace() {
   const [messages, setMessages] = useState<{ id: string, text: string, sender: 'user' | 'assistant' }[]>([]);
-  const { isOwner, diagnostic } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const { session, isOwner, diagnostic } = useAuth();
 
-  const handleSend = (text: string) => {
-    const newMsg = { id: Date.now().toString(), text, sender: 'user' as const };
-    setMessages(prev => [...prev, newMsg]);
-    
-    // Mock response
-    setTimeout(() => {
+  const handleSend = async (text: string) => {
+    if (!text.trim() || loading) return;
+
+    const userMsg = { id: Date.now().toString(), text, sender: 'user' as const };
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
+    setLoading(true);
+
+    try {
+      if (session?.access_token) {
+        const payloadMessages = currentMessages.map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text,
+        }));
+
+        const res = await apiFetch('/api/v1/ai/generate', session.access_token, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: payloadMessages,
+            routingPolicy: 'balanced',
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setMessages(prev => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              text: data.text || 'Received empty response from AI router.',
+              sender: 'assistant',
+            }
+          ]);
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          const errMsg = errorData.error || `Carolina AI Router status: ${res.status}`;
+          setMessages(prev => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              text: `[System]: ${errMsg}`,
+              sender: 'assistant',
+            }
+          ]);
+        }
+      } else {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            text: 'Please log in to chat with Carolina.',
+            sender: 'assistant',
+          }
+        ]);
+      }
+    } catch (err: any) {
       setMessages(prev => [
-        ...prev, 
-        { 
-          id: (Date.now() + 1).toString(), 
-          text: "I am the Carolina-Olivia AI assistant. Full conversational capabilities are awaiting backend provision.", 
-          sender: 'assistant' 
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          text: `[Connection Notice]: ${err?.message || 'Unable to connect to Gateway AI Router.'}`,
+          sender: 'assistant',
         }
       ]);
-    }, 1000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -40,7 +97,7 @@ export function ChatWorkspace() {
               </div>
               <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-2">How can I help you today?</h2>
               <p className="text-slate-500 dark:text-slate-400 max-w-sm">
-                I am your Carolina-Olivia operations assistant. 
+                I am your Carolina-Olivia operations assistant.
               </p>
             </div>
           )}
@@ -73,6 +130,15 @@ export function ChatWorkspace() {
               </motion.div>
             ))}
           </AnimatePresence>
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                <span>Carolina is thinking...</span>
+              </div>
+            </div>
+          )}
           
           {diagnostic && messages.length === 0 && (
             <div className="mt-8 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-xs text-slate-600 dark:text-slate-400 w-full">
