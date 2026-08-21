@@ -38,19 +38,25 @@ describe('Phase 2 AI Infrastructure & Router', () => {
       const grok = res.body.providers.find((p: any) => p.slug === 'grok');
       expect(grok).toBeDefined();
       expect(grok.name).toBe('xAI Grok');
-      expect(grok.status).toBe('healthy');
       expect(grok.capabilities).toContain('chat.generate');
       expect(grok.api_key).toBeUndefined();
       expect(grok.secret).toBeUndefined();
+
+      const builtin = res.body.providers.find((p: any) => p.slug === 'builtin');
+      expect(builtin).toBeDefined();
+      expect(builtin.name).toBe('Built-in Baseline');
+      expect(builtin.status).toBe('healthy');
+      expect(builtin.capabilities).toContain('chat.generate');
     });
 
-    it('returns provider details by slug or id', async () => {
+    it('returns provider details by slug or id including builtin', async () => {
       const res = await supertest(app)
-        .get('/api/v1/providers/grok')
+        .get('/api/v1/providers/builtin')
         .set('Authorization', `Bearer ${nonOwnerToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.provider.slug).toBe('grok');
+      expect(res.body.provider.slug).toBe('builtin');
+      expect(res.body.provider.name).toBe('Built-in Baseline');
     });
 
     it('allows owner to check provider health', async () => {
@@ -199,6 +205,73 @@ describe('Phase 2 AI Infrastructure & Router', () => {
 
       expect(usageRes.status).toBe(200);
       expect(usageRes.body.summary.totalRequests).toBeGreaterThanOrEqual(1);
+    });
+
+    it('generates a deterministic greeting response using baseline provider when balanced policy is used', async () => {
+      const res = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'Hello' }],
+          routingPolicy: 'balanced',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+      expect(res.body.provider).toBe('builtin');
+      expect(res.body.model).toBe('baseline-v1');
+      expect(res.body.text).toContain("Hello. I'm Carolina. The baseline AI provider is active and ready.");
+      expect(res.body.usage).toBeDefined();
+      expect(res.body.usage.inputTokens).toBeGreaterThan(0);
+      expect(res.body.usage.outputTokens).toBeGreaterThan(0);
+    });
+
+    it('evaluates arithmetic calculations accurately via baseline provider', async () => {
+      const res = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'What is 2 + 2?' }],
+          routingPolicy: 'balanced',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.text).toBe('2 + 2 equals 4.');
+    });
+
+    it('supports preferredProvider: builtin and local_first policy directly', async () => {
+      const res = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          prompt: 'System status check',
+          preferredProvider: 'builtin',
+          routingPolicy: 'local_first',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.provider).toBe('builtin');
+      expect(res.body.text).toContain('All systems operational');
+    });
+
+    it('records zero estimated cost for baseline provider usage', async () => {
+      dbStore.clearUsage();
+
+      await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'Who are you?' }],
+          routingPolicy: 'balanced',
+        });
+
+      const usageRes = await supertest(app)
+        .get('/api/v1/usage')
+        .set('Authorization', `Bearer ${nonOwnerToken}`);
+
+      expect(usageRes.status).toBe(200);
+      expect(usageRes.body.summary.successfulRequests).toBe(1);
+      expect(usageRes.body.summary.estimatedCost).toBe(0);
     });
   });
 });

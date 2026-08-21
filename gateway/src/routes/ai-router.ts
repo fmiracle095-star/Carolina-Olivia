@@ -79,8 +79,14 @@ aiRouter.post('/generate', authenticate, async (req: Request, res: Response, nex
     });
   } catch (err: any) {
     const statusCode = err?.statusCode || 500;
+    const isClientError = statusCode === 400 || statusCode === 429;
+    const isSafeProviderError = statusCode === 503 && err.errorCode === 'PROVIDER_UNAVAILABLE';
+    const message = isClientError || isSafeProviderError
+      ? err.message
+      : 'Carolina is temporarily unable to process this request. Please try again shortly.';
+
     return res.status(statusCode).json({
-      error: err.message || 'AI routing and execution error',
+      error: message,
       errorCode: err.errorCode || 'AI_ROUTER_ERROR',
     });
   }

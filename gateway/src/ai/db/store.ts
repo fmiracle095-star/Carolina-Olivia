@@ -37,9 +37,48 @@ export class DatabaseStore {
   }
 
   private seedDefaultData() {
+    const builtinProviderId = '10000000-0000-0000-0000-000000000000';
+    const baselineModelId = '20000000-0000-0000-0000-000000000000';
     const grokProviderId = '10000000-0000-0000-0000-000000000001';
     const grok2ModelId = '20000000-0000-0000-0000-000000000001';
     const grokBetaModelId = '20000000-0000-0000-0000-000000000002';
+
+    const builtinProvider: ProviderRecord = {
+      id: builtinProviderId,
+      name: 'Built-in Baseline',
+      slug: 'builtin',
+      type: 'local',
+      base_url: null,
+      enabled: true,
+      status: 'healthy',
+      auth_type: 'none',
+      capabilities: ['chat.generate'],
+      metadata: { vendor: 'Built-in', description: 'Deterministic baseline AI operations engine', apiKeyRequired: false },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.providers.set(builtinProvider.id, builtinProvider);
+
+    const baselineModel: ModelRecord = {
+      id: baselineModelId,
+      provider_id: builtinProviderId,
+      name: 'baseline-v1',
+      slug: 'baseline-v1',
+      model_identifier: 'baseline-v1',
+      display_name: 'Carolina Baseline v1',
+      description: 'Deterministic baseline AI model for operational verification and fallback',
+      context_window: 32768,
+      local_or_remote: 'local',
+      enabled: true,
+      priority: 1,
+      status: 'healthy',
+      input_cost: 0,
+      output_cost: 0,
+      metadata: { builtin: true, costPerMillion: 0 },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.models.set(baselineModel.id, baselineModel);
 
     const grokProvider: ProviderRecord = {
       id: grokProviderId,
@@ -100,6 +139,14 @@ export class DatabaseStore {
     this.models.set(grokBetaModel.id, grokBetaModel);
 
     const caps: ModelCapabilityRecord[] = [
+      {
+        id: crypto.randomUUID(),
+        model_id: baselineModelId,
+        capability: 'chat.generate',
+        enabled: true,
+        metadata: {},
+        created_at: new Date().toISOString(),
+      },
       {
         id: crypto.randomUUID(),
         model_id: grok2ModelId,
@@ -240,6 +287,11 @@ export class DatabaseStore {
     for (const p of this.providers.values()) {
       if (p.slug === slug) return p;
     }
+    if (slug === 'baseline') {
+      for (const p of this.providers.values()) {
+        if (p.slug === 'builtin') return p;
+      }
+    }
     return null;
   }
 
@@ -320,6 +372,11 @@ export class DatabaseStore {
     for (const m of this.models.values()) {
       if (m.model_identifier === ident || m.slug === ident || m.id === ident) {
         return m;
+      }
+    }
+    if (ident === 'baseline' || ident === 'builtin') {
+      for (const m of this.models.values()) {
+        if (m.model_identifier === 'baseline-v1' || m.slug === 'baseline-v1') return m;
       }
     }
     if (this.supabase) {

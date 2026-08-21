@@ -113,11 +113,10 @@ export class AIRouter {
       } catch (err: any) {
         lastError = err;
         const attemptLatency = Math.round(performance.now() - attemptStart);
-        const isRetryable = err instanceof AIProviderError ? err.isRetryable : false;
         const statusCode = (err as any)?.statusCode || 500;
         const errorCode = (err as any)?.errorCode || 'EXECUTION_FAILED';
 
-        // Record failed attempt
+        // Record failed attempt in usage telemetry
         await usageService.recordUsage({
           userId: context.userId,
           conversationId: request.conversationId,
@@ -128,18 +127,18 @@ export class AIRouter {
           latencyMs: attemptLatency,
           status: statusCode === 429 ? 'rate_limited' : (statusCode === 504 ? 'timeout' : 'failed'),
           errorCode,
-          metadata: { errorMessage: err?.message, isRetryable },
+          metadata: { errorMessage: err?.message, provider: provider.slug, model: model.model_identifier },
         });
 
-        // If error is not retryable (e.g. invalid request, authentication error), stop trying fallbacks
-        if (!isRetryable) {
-          throw err;
-        }
+        // Controlled fallback: continue to next candidate provider in the fallback chain
       }
     }
 
     // All candidates failed
-    throw lastError || new Error('AI Router execution failed across all candidate providers');
+    const finalErr = new Error('Carolina is temporarily unable to process this request. Please try again shortly.');
+    (finalErr as any).statusCode = 503;
+    (finalErr as any).errorCode = 'PROVIDER_UNAVAILABLE';
+    throw finalErr;
   }
 
   async *streamRoute(request: NormalizedAIRequest, context: RouterUserContext): AsyncIterable<NormalizedAIChunk> {
@@ -275,13 +274,26 @@ export class AIRouter {
       }
 
       // Check preferred provider if specified
-      if (request.preferredProvider && provider.slug !== request.preferredProvider && provider.id !== request.preferredProvider) {
-        continue;
+      if (request.preferredProvider) {
+        const pref = request.preferredProvider.toLowerCase();
+        const matchesSlug = provider.slug === pref || 
+          ((pref === 'baseline' || pref === 'builtin') && (provider.slug === 'builtin' || provider.slug === 'baseline'));
+        const matchesId = provider.id === request.preferredProvider;
+        if (!matchesSlug && !matchesId) {
+          continue;
+        }
       }
 
       // Check preferred model if specified
-      if (request.preferredModel && model.model_identifier !== request.preferredModel && model.slug !== request.preferredModel && model.id !== request.preferredModel) {
-        continue;
+      if (request.preferredModel) {
+        const pref = request.preferredModel.toLowerCase();
+        const matchesIdent = model.model_identifier.toLowerCase() === pref || model.slug.toLowerCase() === pref;
+        const matchesAlias = (pref === 'baseline' || pref === 'builtin' || pref === 'baseline-v1') && 
+          (model.model_identifier === 'baseline-v1' || model.slug === 'baseline-v1');
+        const matchesId = model.id === request.preferredModel;
+        if (!matchesIdent && !matchesAlias && !matchesId) {
+          continue;
+        }
       }
 
       eligible.push({ model, provider, adapter });

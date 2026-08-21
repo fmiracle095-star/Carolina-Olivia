@@ -2,6 +2,7 @@ export * from './types/ai';
 export * from './db/schema';
 export * from './db/store';
 export * from './adapters/base';
+export * from './adapters/baseline';
 export * from './adapters/grok';
 export * from './adapters/registry';
 export * from './registry/provider-registry';
