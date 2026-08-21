@@ -22,9 +22,6 @@ export class ExecutionPlanner {
     if (analysis.complexity === 'high' || analysis.intent === 'coding' || analysis.intent === 'reasoning') {
       return 'best_quality';
     }
-    if (analysis.intent === 'conversation' || analysis.intent === 'calculation' || analysis.complexity === 'low') {
-      return 'fastest';
-    }
     return 'balanced';
   }
 }

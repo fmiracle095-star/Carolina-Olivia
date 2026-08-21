@@ -6,7 +6,7 @@ export interface ChatMessage {
 export interface NormalizedAIRequest {
   model?: string;
   messages: ChatMessage[];
-  capability: string; // 'chat.generate' | 'chat.stream'
+  capability?: string; // 'chat.generate' | 'chat.stream'
   temperature?: number;
   maxTokens?: number;
   preferredModel?: string | null;

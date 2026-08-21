@@ -11,10 +11,10 @@ export class TaskAnalyzer {
 
     const normalized = lastUserContent.toLowerCase();
 
-    // 1. Owner & Provider & System Operations
-    if (this.isProviderManagement(normalized)) {
+    // 1. System, Provider & Owner Operations
+    if (this.isSystemQuery(normalized)) {
       return {
-        intent: 'provider_management',
+        intent: 'system',
         complexity: 'low',
         requiredCapabilities: ['system_information', 'chat.generate'],
         confidence: 0.95,
@@ -22,9 +22,9 @@ export class TaskAnalyzer {
       };
     }
 
-    if (this.isSystemQuery(normalized)) {
+    if (this.isProviderManagement(normalized)) {
       return {
-        intent: 'system',
+        intent: 'provider_management',
         complexity: 'low',
         requiredCapabilities: ['system_information', 'chat.generate'],
         confidence: 0.95,
@@ -42,18 +42,7 @@ export class TaskAnalyzer {
       };
     }
 
-    // 2. Calculation
-    if (this.isCalculation(lastUserContent, normalized)) {
-      return {
-        intent: 'calculation',
-        complexity: 'low',
-        requiredCapabilities: ['calculation', 'chat.generate'],
-        confidence: 0.95,
-        requiresGeneralAI: false,
-      };
-    }
-
-    // 3. Coding
+    // 2. Coding (prioritized before general calculation)
     if (this.isCoding(lastUserContent, normalized)) {
       const complexity = this.determineCodingComplexity(normalized);
       return {
@@ -62,6 +51,17 @@ export class TaskAnalyzer {
         requiredCapabilities: ['code_generation', 'chat.generate'],
         confidence: 0.9,
         requiresGeneralAI: true,
+      };
+    }
+
+    // 3. Calculation
+    if (this.isCalculation(lastUserContent, normalized)) {
+      return {
+        intent: 'calculation',
+        complexity: 'low',
+        requiredCapabilities: ['calculation', 'chat.generate'],
+        confidence: 0.95,
+        requiresGeneralAI: false,
       };
     }
 
@@ -147,7 +147,7 @@ export class TaskAnalyzer {
   }
 
   private isSystemQuery(text: string): boolean {
-    return /\b(system status|cluster health|are systems operational|ping|status check|gateway status)\b/i.test(text);
+    return /\b(system status|cluster health|are systems operational|ping|status check|gateway status|active in the system|in the system)\b/i.test(text);
   }
 
   private isOwnerOperation(text: string): boolean {
@@ -205,7 +205,7 @@ export class TaskAnalyzer {
   }
 
   private determineComplexity(text: string, defaultLevel: TaskComplexity): TaskComplexity {
-    if (text.length > 500 || /\b(detailed|comprehensive|in-depth|exhaustive|advanced|complex)\b/i.test(text)) {
+    if (text.length > 500 || /\b(detailed|comprehensive|in-depth|exhaustive|advanced|complex|relativity|distributed systems|quantum mechanics)\b/i.test(text)) {
       return 'high';
     }
     if (text.length < 50 && !/\b(explain|why|how|details)\b/i.test(text)) {
