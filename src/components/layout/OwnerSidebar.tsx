@@ -15,10 +15,11 @@ import {
   Database, 
   FolderKanban, 
   ShieldAlert,
+  Brain,
   X
 } from 'lucide-react';
 
-export type OwnerToolTab = 'chat' | 'models' | 'providers' | 'plugins' | 'tools' | 'api' | 'terminal' | 'agent' | 'usage' | 'memory' | 'files' | 'system';
+export type OwnerToolTab = 'chat' | 'intelligence' | 'models' | 'providers' | 'plugins' | 'tools' | 'api' | 'terminal' | 'agent' | 'usage' | 'memory' | 'files' | 'system';
 
 interface OwnerSidebarProps {
   activeTab: OwnerToolTab;
@@ -29,6 +30,7 @@ interface OwnerSidebarProps {
 
 export const ownerToolsList = [
   { id: 'chat' as OwnerToolTab, name: 'Carolina Chat', icon: MessageSquare, description: 'Primary neural conversational workspace' },
+  { id: 'intelligence' as OwnerToolTab, name: 'Intelligence Test', icon: Brain, description: 'Orchestration & classification test card' },
   { id: 'models' as OwnerToolTab, name: 'Models', icon: Cpu, description: 'Remote & local model registry' },
   { id: 'providers' as OwnerToolTab, name: 'Providers', icon: Layers, description: 'AI provider bindings (OpenAI, Google, etc.)' },
   { id: 'plugins' as OwnerToolTab, name: 'Plugins', icon: Plug, description: 'Active extensions and integrations' },

@@ -31,6 +31,14 @@ export interface NormalizedAIResponse {
   finishReason?: string;
   usage?: NormalizedUsage;
   latencyMs?: number;
+  orchestration?: {
+    intent: string;
+    complexity: string;
+    requiredCapabilities: string[];
+    executionPlan?: any;
+    fallbackCount?: number;
+    events?: any[];
+  };
 }
 
 export interface NormalizedAIChunk {

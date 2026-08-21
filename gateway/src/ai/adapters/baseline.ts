@@ -83,37 +83,44 @@ export class BaselineProviderAdapter implements ProviderAdapter {
       return "I'm doing well, thank you! Ready to assist you. How can I help today?";
     }
 
-    // 5. Conversational: Introductions / Identity
-    if (/\b(who\s+are\s+you|what\s+is\s+your\s+name|what's\s+your\s+name|whats\s+your\s+name|who\s+is\s+carolina|introduce\s+yourself|tell\s+me\s+about\s+yourself)\b/i.test(normalized)) {
-      return "I'm Carolina, your assistant on the Carolina-Olivia platform. I'm here to help with conversation, calculations, system information, and everyday queries.";
+    // 5. Conversational: What's up?
+    if (/\b(what's\s+up|whats\s+up|sup)\b/i.test(normalized)) {
+      return "Not much! Just ready to help you with calculations, system information, date and time, or general questions. How can I help?";
     }
 
-    // 6. Conversational: What can you do / Capabilities / Help
-    if (/\b(what\s+can\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+you\s+help\s+(?:me\s+)?with|how\s+can\s+you\s+help|what\s+can\s+i\s+ask\s+you|help)\b/i.test(normalized)) {
-      return "I can help with basic conversation, calculations, date and time, system status, and general questions.";
+    // 6. Conversational: Introductions / Identity
+    if (/\b(who\s+are\s+you|what\s+are\s+you|what\s+is\s+carolina|who\s+is\s+carolina|tell\s+me\s+about\s+yourself|introduce\s+yourself|what\s+is\s+your\s+purpose|your\s+purpose|what(?:'s|\s+is)\s+your\s+name|whats\s+your\s+name)\b/i.test(normalized)) {
+      return "I'm Carolina, the AI assistant within Carolina-Olivia. I'm currently running in baseline mode, so I can handle conversation, calculations, date and time, system information, and some general questions. When a more capable AI provider is available, the AI Router can use it automatically.";
     }
 
-    // 7. Conversational: Goodbyes
+    // 7. Conversational: What can you do / Capabilities / Help
+    if (/^(help|help\s+me)$/i.test(normalized) ||
+        /^(what\s+can\s+you\s+do|what\s+are\s+your\s+capabilities|what\s+can\s+carolina\s+do|what\s+can\s+you\s+help\s+(?:me\s+)?with|how\s+can\s+you\s+help(?:\s+me)?|what\s+can\s+i\s+ask\s+you)\??$/i.test(normalized) ||
+        /^(?:show|list|tell\s+me)\s+(?:me\s+)?(?:your\s+)?capabilities\??$/i.test(normalized)) {
+      return "I can help with basic conversation, calculations, date and time, system information, and other supported requests.";
+    }
+
+    // 8. Conversational: Goodbyes
     if (/\b(goodbye|bye|see\s+you|see\s+ya|farewell|have\s+a\s+good\s+(?:day|night|evening)|talk\s+to\s+you\s+later)\b/i.test(normalized)) {
       return "Goodbye! Feel free to reach out whenever you need assistance.";
     }
 
-    // 8. Conversational: Thanks / Gratitude
+    // 9. Conversational: Thanks / Gratitude
     if (/\b(thank\s+you|thanks|thank\s+you\s+so\s+much|much\s+appreciated|thanks\s+a\s+lot|thx)\b/i.test(normalized)) {
       return "You're welcome! Let me know if you need anything else.";
     }
 
-    // 9. Conversational: Simple affirmations / acknowledgments
+    // 10. Conversational: Simple affirmations / acknowledgments
     if (/^(ok|okay|got\s+it|sounds\s+good|cool|nice|great|awesome|perfect|understood)\b/i.test(normalized)) {
-      return "Glad to hear that. Let me know how else I can assist you.";
+      return "Sounds good! Let me know if you need anything else.";
     }
 
-    // 10. System Status
+    // 11. System Status
     if (/\b(are\s+you\s+online|are\s+you\s+working|what(?:'s|\s+is)\s+your\s+status|are\s+(?:your\s+)?systems\s+operational|system\s+status|is\s+the\s+system\s+(?:up|online|working)|status\s+check|ping)\b/i.test(normalized)) {
       return "All systems are online and operational. I'm ready to assist.";
     }
 
-    // 11. Operations Assistance: Model & Provider queries
+    // 12. Operations Assistance: Model & Provider queries
     if (/\b(which\s+model|what\s+model|current\s+model)\b/i.test(normalized)) {
       return "I'm currently responding as Carolina Baseline v1.";
     }
@@ -121,8 +128,8 @@ export class BaselineProviderAdapter implements ProviderAdapter {
       return "Carolina provides access to built-in operational capabilities and configured AI providers managed through the gateway.";
     }
 
-    // 12. Graceful fallback for unsupported requests
-    return "I can help with basic conversation, calculations, system information, and common questions. A more capable AI provider isn't currently available for that request.";
+    // 13. Controlled capability-aware fallback for unsupported requests
+    return "I may need a more capable AI provider to help with that properly. If one is available, the AI Router can handle the request automatically.";
   }
 
   // --- Date & Time Handling ---
@@ -210,7 +217,6 @@ export class BaselineProviderAdapter implements ProviderAdapter {
       }
 
       // Format clean output e.g. "2 + 2 equals 4."
-      // Format display of stripped original expression or clean representation
       const displayExpr = stripped
         .replace(/[xX×]/g, '*')
         .replace(/÷/g, '/');

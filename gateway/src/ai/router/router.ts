@@ -10,6 +10,10 @@ import {
   NormalizedAIChunk 
 } from '../types/ai';
 import { ModelRecord, ProviderRecord } from '../db/schema';
+import { taskAnalyzer } from '../orchestration/task-analyzer';
+import { executionPlanner } from '../orchestration/planner';
+import { orchestrationEvents } from '../orchestration/events';
+import { ExecutionPlan } from '../orchestration/types';
 
 export interface RouterUserContext {
   userId: string;
@@ -22,9 +26,26 @@ export class AIRouter {
     const requestId = request.requestId || crypto.randomUUID();
     const startTime = performance.now();
 
-    // 1. Quota Check
+    // 1. Orchestration Analysis & Planning
+    orchestrationEvents.emit(requestId, 'REQUEST_RECEIVED', {});
+    orchestrationEvents.emit(requestId, 'ANALYZING', {});
+    const analysis = taskAnalyzer.analyze(request);
+
+    orchestrationEvents.emit(requestId, 'PLANNING', { 
+      intent: analysis.intent, 
+      complexity: analysis.complexity 
+    });
+    const plan = executionPlanner.createPlan(analysis, request);
+
+    orchestrationEvents.emit(requestId, 'SELECTING_PROVIDER', { 
+      intent: plan.intent, 
+      complexity: plan.complexity 
+    });
+
+    // 2. Quota Check
     const quotaResult = await quotaManager.checkQuota(context.userId, context.isOwner);
     if (!quotaResult.allowed) {
+      orchestrationEvents.emit(requestId, 'FAILED', { message: quotaResult.reason || 'Quota limit exceeded' });
       await usageService.recordUsage({
         userId: context.userId,
         conversationId: request.conversationId,
@@ -32,7 +53,7 @@ export class AIRouter {
         requestId,
         status: 'rejected',
         errorCode: 'QUOTA_EXCEEDED',
-        metadata: { reason: quotaResult.reason, limitType: quotaResult.limitType },
+        metadata: { reason: quotaResult.reason, limitType: quotaResult.limitType, intent: analysis.intent },
       });
 
       const err = new Error(quotaResult.reason || 'AI quota limit exceeded');
@@ -41,10 +62,11 @@ export class AIRouter {
       throw err;
     }
 
-    // 2. Resolve Eligible Models and Providers
-    const candidates = await this.resolveCandidates(request, capability);
+    // 3. Resolve Eligible Models and Providers using Execution Plan
+    const candidates = await this.resolveCandidates(request, capability, plan);
 
     if (candidates.length === 0) {
+      orchestrationEvents.emit(requestId, 'FAILED', { message: 'No eligible AI models or providers available' });
       await usageService.recordUsage({
         userId: context.userId,
         conversationId: request.conversationId,
@@ -53,7 +75,7 @@ export class AIRouter {
         latencyMs: Math.round(performance.now() - startTime),
         status: 'failed',
         errorCode: 'NO_AVAILABLE_MODELS',
-        metadata: { reason: 'No eligible AI models or providers found' },
+        metadata: { reason: 'No eligible AI models or providers found', intent: analysis.intent },
       });
 
       const err = new Error('No eligible AI models or providers are available for this request');
@@ -62,12 +84,28 @@ export class AIRouter {
       throw err;
     }
 
-    // 3. Attempt Execution with Controlled Fallback
+    // 4. Attempt Execution with Controlled Fallback
     let lastError: any = null;
+    let fallbackCount = 0;
 
-    for (const candidate of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
       const { model, provider, adapter } = candidate;
       const attemptStart = performance.now();
+
+      if (i > 0) {
+        fallbackCount++;
+        orchestrationEvents.emit(requestId, 'FALLBACK', {
+          provider: provider.slug,
+          model: model.model_identifier,
+          message: `Falling back to provider "${provider.slug}" (${model.model_identifier})`,
+        });
+      }
+
+      orchestrationEvents.emit(requestId, 'EXECUTING', {
+        provider: provider.slug,
+        model: model.model_identifier,
+      });
 
       try {
         const response = await adapter.generate({
@@ -101,7 +139,19 @@ export class AIRouter {
           latencyMs: response.latencyMs || attemptLatency,
           status: 'success',
           estimatedCost,
-          metadata: { policy: request.routingPolicy || 'balanced', modelIdentifier: model.model_identifier },
+          metadata: { 
+            policy: plan.preferredPolicy, 
+            modelIdentifier: model.model_identifier,
+            intent: analysis.intent,
+            complexity: analysis.complexity,
+            fallbackCount,
+          },
+        });
+
+        orchestrationEvents.emit(requestId, 'COMPLETED', {
+          provider: provider.slug,
+          model: model.model_identifier,
+          latencyMs: attemptLatency,
         });
 
         return {
@@ -109,6 +159,14 @@ export class AIRouter {
           requestId,
           provider: provider.slug,
           model: model.model_identifier,
+          orchestration: {
+            intent: analysis.intent,
+            complexity: analysis.complexity,
+            requiredCapabilities: analysis.requiredCapabilities,
+            executionPlan: plan,
+            fallbackCount,
+            events: orchestrationEvents.getEventsForRequest(requestId),
+          },
         };
       } catch (err: any) {
         lastError = err;
@@ -127,12 +185,18 @@ export class AIRouter {
           latencyMs: attemptLatency,
           status: statusCode === 429 ? 'rate_limited' : (statusCode === 504 ? 'timeout' : 'failed'),
           errorCode,
-          metadata: { errorMessage: err?.message, provider: provider.slug, model: model.model_identifier },
+          metadata: { 
+            errorMessage: err?.message, 
+            provider: provider.slug, 
+            model: model.model_identifier,
+            intent: analysis.intent,
+            complexity: analysis.complexity,
+          },
         });
-
-        // Controlled fallback: continue to next candidate provider in the fallback chain
       }
     }
+
+    orchestrationEvents.emit(requestId, 'FAILED', { message: 'All candidate model providers failed' });
 
     // All candidates failed
     const finalErr = new Error('Carolina is temporarily unable to process this request. Please try again shortly.');
@@ -146,9 +210,19 @@ export class AIRouter {
     const requestId = request.requestId || crypto.randomUUID();
     const startTime = performance.now();
 
+    orchestrationEvents.emit(requestId, 'REQUEST_RECEIVED', {});
+    orchestrationEvents.emit(requestId, 'ANALYZING', {});
+    const analysis = taskAnalyzer.analyze(request);
+
+    orchestrationEvents.emit(requestId, 'PLANNING', { intent: analysis.intent, complexity: analysis.complexity });
+    const plan = executionPlanner.createPlan(analysis, request);
+
+    orchestrationEvents.emit(requestId, 'SELECTING_PROVIDER', { intent: plan.intent, complexity: plan.complexity });
+
     // 1. Quota Check
     const quotaResult = await quotaManager.checkQuota(context.userId, context.isOwner);
     if (!quotaResult.allowed) {
+      orchestrationEvents.emit(requestId, 'FAILED', { message: quotaResult.reason || 'Quota limit exceeded' });
       await usageService.recordUsage({
         userId: context.userId,
         conversationId: request.conversationId,
@@ -166,8 +240,9 @@ export class AIRouter {
     }
 
     // 2. Resolve Candidates
-    const candidates = await this.resolveCandidates(request, capability);
+    const candidates = await this.resolveCandidates(request, capability, plan);
     if (candidates.length === 0) {
+      orchestrationEvents.emit(requestId, 'FAILED', { message: 'No eligible AI models available for streaming' });
       const err = new Error('No eligible AI models or providers are available for this request');
       (err as any).statusCode = 503;
       (err as any).errorCode = 'NO_AVAILABLE_MODELS';
@@ -183,6 +258,8 @@ export class AIRouter {
       (err as any).errorCode = 'STREAMING_NOT_SUPPORTED';
       throw err;
     }
+
+    orchestrationEvents.emit(requestId, 'EXECUTING', { provider: provider.slug, model: model.model_identifier });
 
     let totalChars = 0;
     let finishReason = 'stop';
@@ -207,7 +284,7 @@ export class AIRouter {
       // Record streaming usage estimate
       const latencyMs = Math.round(performance.now() - startTime);
       const estOutputTokens = Math.max(1, Math.round(totalChars / 4));
-      const estInputTokens = Math.round(request.messages.reduce((acc, m) => acc + m.content.length, 0) / 4);
+      const estInputTokens = Math.round(request.messages.reduce((acc, m) => acc + (m.content?.length || 0), 0) / 4);
       const totalTokens = estInputTokens + estOutputTokens;
 
       const inputCost = (model.input_cost ?? 0) * (estInputTokens / 1000);
@@ -227,10 +304,13 @@ export class AIRouter {
         latencyMs,
         status: 'success',
         estimatedCost,
-        metadata: { streaming: true, modelIdentifier: model.model_identifier },
+        metadata: { streaming: true, modelIdentifier: model.model_identifier, intent: analysis.intent },
       });
+
+      orchestrationEvents.emit(requestId, 'COMPLETED', { provider: provider.slug, model: model.model_identifier, latencyMs });
     } catch (err: any) {
       const latencyMs = Math.round(performance.now() - startTime);
+      orchestrationEvents.emit(requestId, 'FAILED', { provider: provider.slug, model: model.model_identifier, message: err?.message });
       await usageService.recordUsage({
         userId: context.userId,
         conversationId: request.conversationId,
@@ -247,7 +327,11 @@ export class AIRouter {
     }
   }
 
-  private async resolveCandidates(request: NormalizedAIRequest, capability: string): Promise<Array<{
+  private async resolveCandidates(
+    request: NormalizedAIRequest, 
+    capability: string,
+    plan?: ExecutionPlan
+  ): Promise<Array<{
     model: ModelRecord;
     provider: ProviderRecord;
     adapter: any;
@@ -274,23 +358,23 @@ export class AIRouter {
       }
 
       // Check preferred provider if specified
-      if (request.preferredProvider) {
-        const pref = request.preferredProvider.toLowerCase();
+      if (request.preferredProvider || plan?.preferredProvider) {
+        const pref = (request.preferredProvider || plan?.preferredProvider || '').toLowerCase();
         const matchesSlug = provider.slug === pref || 
           ((pref === 'baseline' || pref === 'builtin') && (provider.slug === 'builtin' || provider.slug === 'baseline'));
-        const matchesId = provider.id === request.preferredProvider;
+        const matchesId = provider.id === pref;
         if (!matchesSlug && !matchesId) {
           continue;
         }
       }
 
       // Check preferred model if specified
-      if (request.preferredModel) {
-        const pref = request.preferredModel.toLowerCase();
+      if (request.preferredModel || plan?.preferredModel) {
+        const pref = (request.preferredModel || plan?.preferredModel || '').toLowerCase();
         const matchesIdent = model.model_identifier.toLowerCase() === pref || model.slug.toLowerCase() === pref;
         const matchesAlias = (pref === 'baseline' || pref === 'builtin' || pref === 'baseline-v1') && 
           (model.model_identifier === 'baseline-v1' || model.slug === 'baseline-v1');
-        const matchesId = model.id === request.preferredModel;
+        const matchesId = model.id === pref;
         if (!matchesIdent && !matchesAlias && !matchesId) {
           continue;
         }
@@ -299,10 +383,18 @@ export class AIRouter {
       eligible.push({ model, provider, adapter });
     }
 
-    // Apply Routing Policy sorting
-    const policy = request.routingPolicy || 'balanced';
+    // Apply Routing Policy & Plan-aware sorting
+    const policy = plan?.preferredPolicy || request.routingPolicy || 'balanced';
 
     eligible.sort((a, b) => {
+      // If task requires general AI capability (e.g. coding, knowledge, reasoning), prefer non-baseline models over builtin baseline
+      if (plan?.requiresGeneralAI) {
+        const aIsBuiltin = a.provider.slug === 'builtin';
+        const bIsBuiltin = b.provider.slug === 'builtin';
+        if (!aIsBuiltin && bIsBuiltin) return -1;
+        if (aIsBuiltin && !bIsBuiltin) return 1;
+      }
+
       switch (policy) {
         case 'best_quality':
           return (b.model.priority ?? 0) - (a.model.priority ?? 0) || ((b.model.context_window ?? 0) - (a.model.context_window ?? 0));

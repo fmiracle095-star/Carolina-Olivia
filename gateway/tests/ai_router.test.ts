@@ -225,26 +225,89 @@ describe('Phase 2 AI Infrastructure & Router', () => {
       expect(res.body.text).not.toContain('routing pipelines');
     });
 
-    it('handles conversational queries like "How are you?" and "What can you do?"', async () => {
-      const res1 = await supertest(app)
+    it('handles identity queries naturally for Carolina', async () => {
+      const queries = ['What are you?', 'Who are you?', 'Tell me about yourself', 'What is Carolina?', 'What is your purpose?'];
+
+      for (const query of queries) {
+        const res = await supertest(app)
+          .post('/api/v1/ai/generate')
+          .set('Authorization', `Bearer ${nonOwnerToken}`)
+          .send({
+            messages: [{ role: 'user', content: query }],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.text).toContain("I'm Carolina, the AI assistant within Carolina-Olivia.");
+        expect(res.body.text).toContain("baseline mode");
+        expect(res.body.text).not.toContain("ProviderAdapter");
+        expect(res.body.text).not.toContain("route");
+        expect(res.body.text).not.toContain("UUID");
+      }
+    });
+
+    it('handles capability queries accurately without false claims', async () => {
+      const queries = ['What can you do?', 'How can you help?', 'What are your capabilities?'];
+
+      for (const query of queries) {
+        const res = await supertest(app)
+          .post('/api/v1/ai/generate')
+          .set('Authorization', `Bearer ${nonOwnerToken}`)
+          .send({
+            messages: [{ role: 'user', content: query }],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.text).toContain('I can help with basic conversation, calculations');
+        expect(res.body.text).not.toContain('image generation');
+        expect(res.body.text).not.toContain('terminal execution');
+      }
+    });
+
+    it('handles general conversation greetings, how are you, whats up, thanks, ok, and goodbye', async () => {
+      const cases = [
+        { query: 'Hi', contains: "Hello! I'm Carolina" },
+        { query: 'How are you?', contains: "I'm doing well, thank you!" },
+        { query: "What's up?", contains: "Not much! Just ready to help" },
+        { query: 'Thanks', contains: "You're welcome!" },
+        { query: 'Ok', contains: "Sounds good!" },
+        { query: 'Goodbye', contains: "Goodbye! Feel free to reach out" },
+      ];
+
+      for (const c of cases) {
+        const res = await supertest(app)
+          .post('/api/v1/ai/generate')
+          .set('Authorization', `Bearer ${nonOwnerToken}`)
+          .send({
+            messages: [{ role: 'user', content: c.query }],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.text).toContain(c.contains);
+      }
+    });
+
+    it('handles ambiguous terms and unsupported general requests with controlled fallback without hallucinating', async () => {
+      const resAmbiguous = await supertest(app)
         .post('/api/v1/ai/generate')
         .set('Authorization', `Bearer ${nonOwnerToken}`)
         .send({
-          messages: [{ role: 'user', content: 'How are you?' }],
+          messages: [{ role: 'user', content: 'Can you help with NOUN?' }],
         });
 
-      expect(res1.status).toBe(200);
-      expect(res1.body.text).toContain("I'm doing well, thank you!");
+      expect(resAmbiguous.status).toBe(200);
+      expect(resAmbiguous.body.text).toBe('I may need a more capable AI provider to help with that properly. If one is available, the AI Router can handle the request automatically.');
 
-      const res2 = await supertest(app)
+      const resUnsupported = await supertest(app)
         .post('/api/v1/ai/generate')
         .set('Authorization', `Bearer ${nonOwnerToken}`)
         .send({
-          messages: [{ role: 'user', content: 'What can you do?' }],
+          messages: [{ role: 'user', content: 'Write a detailed historical summary of quantum mechanics.' }],
         });
 
-      expect(res2.status).toBe(200);
-      expect(res2.body.text).toContain('I can help with basic conversation, calculations');
+      expect(resUnsupported.status).toBe(200);
+      expect(resUnsupported.body.text).toBe('I may need a more capable AI provider to help with that properly. If one is available, the AI Router can handle the request automatically.');
+      expect(resUnsupported.body.text).not.toContain('Grok');
+      expect(resUnsupported.body.text).not.toContain('401');
     });
 
     it('answers date and time questions accurately from server time', async () => {
@@ -340,7 +403,7 @@ describe('Phase 2 AI Infrastructure & Router', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.provider).toBe('builtin');
-      expect(res.body.text).toBe("I can help with basic conversation, calculations, system information, and common questions. A more capable AI provider isn't currently available for that request.");
+      expect(res.body.text).toBe("I may need a more capable AI provider to help with that properly. If one is available, the AI Router can handle the request automatically.");
     });
 
     it('transparently falls back to baseline provider when Grok is unconfigured', async () => {

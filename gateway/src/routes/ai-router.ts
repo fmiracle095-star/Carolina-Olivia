@@ -76,6 +76,7 @@ aiRouter.post('/generate', authenticate, async (req: Request, res: Response, nex
       finishReason: result.finishReason,
       usage: result.usage,
       latencyMs: result.latencyMs,
+      orchestration: result.orchestration,
     });
   } catch (err: any) {
     const statusCode = err?.statusCode || 500;

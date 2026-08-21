@@ -9,6 +9,7 @@ import { apiFetch } from '@/src/lib/api';
 export function ChatWorkspace() {
   const [messages, setMessages] = useState<{ id: string, text: string, sender: 'user' | 'assistant' }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<string>('Analyzing...');
   const { session, isOwner, diagnostic } = useAuth();
 
   const handleSend = async (text: string) => {
@@ -18,6 +19,11 @@ export function ChatWorkspace() {
     const currentMessages = [...messages, userMsg];
     setMessages(currentMessages);
     setLoading(true);
+    setProcessingStatus('Analyzing...');
+
+    const timer1 = setTimeout(() => setProcessingStatus('Planning...'), 300);
+    const timer2 = setTimeout(() => setProcessingStatus('Selecting the best available model...'), 600);
+    const timer3 = setTimeout(() => setProcessingStatus('Generating...'), 900);
 
     try {
       if (session?.access_token) {
@@ -36,6 +42,10 @@ export function ChatWorkspace() {
             routingPolicy: 'balanced',
           }),
         });
+
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
 
         if (res.ok) {
           const data = await res.json();
@@ -60,6 +70,9 @@ export function ChatWorkspace() {
           ]);
         }
       } else {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
         setMessages(prev => [
           ...prev,
           {
@@ -70,6 +83,9 @@ export function ChatWorkspace() {
         ]);
       }
     } catch (err: any) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
       setMessages(prev => [
         ...prev,
         {
@@ -135,7 +151,7 @@ export function ChatWorkspace() {
             <div className="flex justify-start">
               <div className="flex items-center gap-2 px-4 py-3 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-                <span>Carolina is thinking...</span>
+                <span>{processingStatus}</span>
               </div>
             </div>
           )}

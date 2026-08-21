@@ -22,8 +22,48 @@ import {
   Activity,
   AlertCircle,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Brain,
+  Play,
+  Clock,
+  Coins,
+  Sparkles,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
+
+const INTELLIGENCE_TEST_CASES = [
+  // Basic
+  { id: 'basic_greeting', category: 'Basic', name: 'Greeting', prompt: 'Hi', expectedIntent: 'conversation', expectedComplexity: 'low' },
+  { id: 'basic_identity', category: 'Basic', name: 'Identity', prompt: 'What is Carolina?', expectedIntent: 'conversation', expectedComplexity: 'low' },
+  { id: 'basic_datetime', category: 'Basic', name: 'Date/time', prompt: 'What is the current date and time?', expectedIntent: 'conversation', expectedComplexity: 'low' },
+  { id: 'basic_arithmetic', category: 'Basic', name: 'Arithmetic', prompt: 'What is 27 × 14?', expectedIntent: 'calculation', expectedComplexity: 'low' },
+
+  // Classification
+  { id: 'class_conv', category: 'Classification', name: 'Conversation Classification', prompt: 'Hello! How are you doing today?', expectedIntent: 'conversation', expectedComplexity: 'low' },
+  { id: 'class_knowledge', category: 'Classification', name: 'Knowledge Classification', prompt: 'Explain quantum computing to a twelve-year-old.', expectedIntent: 'knowledge', expectedComplexity: 'medium' },
+  { id: 'class_calc', category: 'Classification', name: 'Calculation Classification', prompt: 'Calculate 100 / 4 + 15', expectedIntent: 'calculation', expectedComplexity: 'low' },
+  { id: 'class_coding', category: 'Classification', name: 'Coding Classification', prompt: 'Write a Python program that reads a CSV and calculates the average of a column.', expectedIntent: 'coding', expectedComplexity: 'medium' },
+  { id: 'class_creative', category: 'Classification', name: 'Creative Classification', prompt: 'Write a short poem about space exploration', expectedIntent: 'creative', expectedComplexity: 'medium' },
+  { id: 'class_system', category: 'Classification', name: 'System Classification', prompt: 'What models are currently available?', expectedIntent: 'system', expectedComplexity: 'low' },
+
+  // Complexity
+  { id: 'cmplx_low', category: 'Complexity', name: 'Low Complexity', prompt: 'Hi', expectedComplexity: 'low' },
+  { id: 'cmplx_med', category: 'Complexity', name: 'Medium Complexity', prompt: 'Explain quantum computing', expectedComplexity: 'medium' },
+  { id: 'cmplx_high', category: 'Complexity', name: 'High Complexity', prompt: 'Design an exhaustive distributed event-driven microservices architecture in TypeScript with fault tolerance and concurrency benchmarks.', expectedComplexity: 'high' },
+
+  // Routing
+  { id: 'route_pref_avail', category: 'Routing', name: 'Preferred Provider Available', prompt: 'Hello Carolina', preferredProvider: 'builtin' },
+  { id: 'route_pref_unavail', category: 'Routing', name: 'Preferred Provider Unavailable', prompt: 'Write a script', preferredProvider: 'nonexistent_provider' },
+  { id: 'route_provider_fallback', category: 'Routing', name: 'Provider Fallback', prompt: 'Explain quantum computing', preferredProvider: 'grok' },
+  { id: 'route_baseline_fallback', category: 'Routing', name: 'Baseline Fallback', prompt: 'Hi', preferredModel: 'baseline-v1' },
+
+  // Safety
+  { id: 'safety_unk_prov', category: 'Safety', name: 'Unknown Provider', prompt: 'Test query', preferredProvider: 'unknown_provider_999' },
+  { id: 'safety_unk_model', category: 'Safety', name: 'Unknown Model', prompt: 'Test query', preferredModel: 'unknown_model_999' },
+  { id: 'safety_invalid_req', category: 'Safety', name: 'Invalid Request', prompt: '', rawBody: { messages: [] } },
+  { id: 'safety_unauth_owner', category: 'Safety', name: 'Unauthorized Owner Operation', prompt: 'Check owner vault', simulateNonOwner: true },
+];
 
 export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
   const { session } = useAuth();
@@ -34,6 +74,10 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
   const [systemStatus, setSystemStatus] = useState<any>(null);
   const [healthChecking, setHealthChecking] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const [testResults, setTestResults] = useState<Record<string, any>>({});
+  const [activeTestId, setActiveTestId] = useState<string | null>(null);
+  const [testingRunning, setTestingRunning] = useState<boolean>(false);
 
   useEffect(() => {
     if (!session?.access_token) return;
@@ -111,6 +155,79 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
     }
   };
 
+  const runSingleIntelligenceTest = async (testCase: typeof INTELLIGENCE_TEST_CASES[0]) => {
+    setActiveTestId(testCase.id);
+    const start = performance.now();
+
+    try {
+      const token = testCase.simulateNonOwner ? 'invalid_non_owner_token' : (session?.access_token || '');
+      const body = testCase.rawBody || {
+        messages: testCase.prompt ? [{ role: 'user', content: testCase.prompt }] : [],
+        preferredProvider: testCase.preferredProvider || undefined,
+        preferredModel: testCase.preferredModel || undefined,
+        routingPolicy: 'balanced',
+      };
+
+      const res = await apiFetch('/api/v1/ai/generate', token, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      const latency = Math.round(performance.now() - start);
+
+      if (res.ok) {
+        setTestResults(prev => ({
+          ...prev,
+          [testCase.id]: {
+            status: (data.orchestration?.fallbackCount && data.orchestration.fallbackCount > 0) ? 'fallback' : 'success',
+            detectedIntent: data.orchestration?.intent,
+            complexity: data.orchestration?.complexity,
+            requiredCapabilities: data.orchestration?.requiredCapabilities,
+            selectedProvider: data.provider,
+            selectedModel: data.model,
+            fallbackCount: data.orchestration?.fallbackCount || 0,
+            latencyMs: data.latencyMs || latency,
+            estimatedCost: data.usage?.estimatedCost || 0,
+            text: data.text,
+            events: data.orchestration?.events,
+          }
+        }));
+      } else {
+        setTestResults(prev => ({
+          ...prev,
+          [testCase.id]: {
+            status: 'error',
+            error: data.error || `HTTP ${res.status}`,
+            text: `[Error ${res.status}]: ${data.error || 'Request rejected by AI Router or security check'}`,
+            latencyMs: latency,
+          }
+        }));
+      }
+    } catch (err: any) {
+      setTestResults(prev => ({
+        ...prev,
+        [testCase.id]: {
+          status: 'error',
+          error: err.message,
+          text: `[Exception]: ${err.message}`,
+          latencyMs: Math.round(performance.now() - start),
+        }
+      }));
+    } finally {
+      setActiveTestId(null);
+    }
+  };
+
+  const runAllIntelligenceTests = async () => {
+    setTestingRunning(true);
+    for (const testCase of INTELLIGENCE_TEST_CASES) {
+      await runSingleIntelligenceTest(testCase);
+    }
+    setTestingRunning(false);
+  };
+
   if (tab === 'chat') {
     return null; // rendered by main chat workspace
   }
@@ -144,6 +261,108 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
   );
 
   switch (tab) {
+    case 'intelligence':
+      return (
+        <div className="flex-1 p-6 lg:p-10 overflow-y-auto bg-slate-50 dark:bg-slate-950">
+          <div className="max-w-4xl mx-auto space-y-6">
+            {renderModuleHeader('Intelligence Test Card', 'Orchestration layer task classification, complexity, routing & fallback validation', <Brain className="w-6 h-6" />)}
+
+            <div className="flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-sm">
+              <div>
+                <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">Carolina Intelligence Test Suite</h3>
+                <p className="text-xs text-slate-500">Run automated validation across Intent, Complexity, Routing, Safety & Telemetry</p>
+              </div>
+              <button
+                onClick={runAllIntelligenceTests}
+                disabled={testingRunning}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
+              >
+                <Play className={`w-3.5 h-3.5 ${testingRunning ? 'animate-spin' : ''}`} />
+                {testingRunning ? 'Running Tests...' : 'Run All Intelligence Tests'}
+              </button>
+            </div>
+
+            {['Basic', 'Classification', 'Complexity', 'Routing', 'Safety'].map((category) => {
+              const categoryTests = INTELLIGENCE_TEST_CASES.filter(t => t.category === category);
+              return (
+                <div key={category} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {category} Tests
+                  </h4>
+                  <div className="space-y-3">
+                    {categoryTests.map((testCase) => {
+                      const result = testResults[testCase.id];
+                      const isRunning = activeTestId === testCase.id;
+
+                      return (
+                        <div key={testCase.id} className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <span>{testCase.name}</span>
+                                {result && (
+                                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                                    result.status === 'success' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                                    result.status === 'error' ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400' :
+                                    'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400'
+                                  }`}>
+                                    {result.status.toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 font-mono mt-0.5">
+                                Input: {testCase.prompt ? `"${testCase.prompt}"` : JSON.stringify(testCase.rawBody || {})}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => runSingleIntelligenceTest(testCase)}
+                              disabled={testingRunning}
+                              className="px-3 py-1.5 text-xs font-medium bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl transition-colors flex items-center gap-1.5 shrink-0"
+                            >
+                              <Play className={`w-3 h-3 ${isRunning ? 'animate-spin' : ''}`} />
+                              Run
+                            </button>
+                          </div>
+
+                          {/* Telemetry output */}
+                          {result && (
+                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                              <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-slate-400 block text-[10px]">Intent</span>
+                                <span className="font-semibold text-indigo-600 dark:text-indigo-400 capitalize">{result.detectedIntent || 'N/A'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-slate-400 block text-[10px]">Complexity</span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-200 capitalize">{result.complexity || 'N/A'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-slate-400 block text-[10px]">Provider / Model</span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">{result.selectedProvider || 'builtin'} / {result.selectedModel || 'baseline-v1'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-slate-400 block text-[10px]">Latency / Fallbacks</span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">{result.latencyMs ?? 0}ms ({result.fallbackCount ?? 0} fallbacks)</span>
+                              </div>
+                              <div className="col-span-2 sm:col-span-4 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1">
+                                <span className="text-slate-400 block text-[10px] font-semibold">Response Output</span>
+                                <p className="text-slate-700 dark:text-slate-300 font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
+                                  {result.text || 'No response text.'}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+
     case 'models':
       return (
         <div className="flex-1 p-6 lg:p-10 overflow-y-auto bg-slate-50 dark:bg-slate-950">
