@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifySupabaseToken } from '../auth/jwt';
 import { env } from '../config/env';
 
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Missing or invalid Authorization header' });
@@ -10,7 +10,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
   const token = authHeader.substring(7);
   try {
-    const payload = verifySupabaseToken(token);
+    const payload = await verifySupabaseToken(token);
     (req as any).user = payload;
     next();
   } catch (err: any) {
