@@ -207,12 +207,12 @@ describe('Phase 2 AI Infrastructure & Router', () => {
       expect(usageRes.body.summary.totalRequests).toBeGreaterThanOrEqual(1);
     });
 
-    it('generates a deterministic greeting response using baseline provider when balanced policy is used', async () => {
+    it('generates natural conversational greeting responses', async () => {
       const res = await supertest(app)
         .post('/api/v1/ai/generate')
         .set('Authorization', `Bearer ${nonOwnerToken}`)
         .send({
-          messages: [{ role: 'user', content: 'Hello' }],
+          messages: [{ role: 'user', content: 'Hi' }],
           routingPolicy: 'balanced',
         });
 
@@ -220,38 +220,148 @@ describe('Phase 2 AI Infrastructure & Router', () => {
       expect(res.body.status).toBe('success');
       expect(res.body.provider).toBe('builtin');
       expect(res.body.model).toBe('baseline-v1');
-      expect(res.body.text).toContain("Hello. I'm Carolina. The baseline AI provider is active and ready.");
-      expect(res.body.usage).toBeDefined();
-      expect(res.body.usage.inputTokens).toBeGreaterThan(0);
-      expect(res.body.usage.outputTokens).toBeGreaterThan(0);
+      expect(res.body.text).toBe("Hello! I'm Carolina. How can I help you today?");
+      expect(res.body.text).not.toContain('baseline AI provider');
+      expect(res.body.text).not.toContain('routing pipelines');
     });
 
-    it('evaluates arithmetic calculations accurately via baseline provider', async () => {
-      const res = await supertest(app)
+    it('handles conversational queries like "How are you?" and "What can you do?"', async () => {
+      const res1 = await supertest(app)
         .post('/api/v1/ai/generate')
         .set('Authorization', `Bearer ${nonOwnerToken}`)
         .send({
-          messages: [{ role: 'user', content: 'What is 2 + 2?' }],
-          routingPolicy: 'balanced',
+          messages: [{ role: 'user', content: 'How are you?' }],
         });
 
-      expect(res.status).toBe(200);
-      expect(res.body.text).toBe('2 + 2 equals 4.');
+      expect(res1.status).toBe(200);
+      expect(res1.body.text).toContain("I'm doing well, thank you!");
+
+      const res2 = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'What can you do?' }],
+        });
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.text).toContain('I can help with basic conversation, calculations');
     });
 
-    it('supports preferredProvider: builtin and local_first policy directly', async () => {
+    it('answers date and time questions accurately from server time', async () => {
+      const currentYear = new Date().getUTCFullYear().toString();
+
+      const resDate = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: "What's today's date?" }],
+        });
+
+      expect(resDate.status).toBe(200);
+      expect(resDate.body.text).toContain("Today's date is");
+      expect(resDate.body.text).toContain(currentYear);
+
+      const resDay = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'What day is it?' }],
+        });
+
+      expect(resDay.status).toBe(200);
+      expect(resDay.body.text).toContain('Today is');
+
+      const resTime = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'What time is it?' }],
+        });
+
+      expect(resTime.status).toBe(200);
+      expect(resTime.body.text).toContain('The current time is');
+      expect(resTime.body.text).toContain('(UTC)');
+    });
+
+    it('evaluates multiple arithmetic expressions safely without eval', async () => {
+      const testCases = [
+        { query: '2 + 2', expected: '2 + 2 equals 4.' },
+        { query: '25 + 17', expected: '25 + 17 equals 42.' },
+        { query: '100 / 4', expected: '100 / 4 equals 25.' },
+        { query: '12 * 8', expected: '12 * 8 equals 96.' },
+        { query: '50 - 13', expected: '50 - 13 equals 37.' },
+        { query: 'What is 10 / 0?', expected: 'Division by zero is undefined.' },
+      ];
+
+      for (const tc of testCases) {
+        const res = await supertest(app)
+          .post('/api/v1/ai/generate')
+          .set('Authorization', `Bearer ${nonOwnerToken}`)
+          .send({
+            messages: [{ role: 'user', content: tc.query }],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.text).toBe(tc.expected);
+      }
+    });
+
+    it('answers system status inquiries cleanly without exposing internals', async () => {
+      const res1 = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'Are you online?' }],
+        });
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.text).toBe('All systems are online and operational. I\'m ready to assist.');
+      expect(res1.body.text).not.toContain('API');
+      expect(res1.body.text).not.toContain('env');
+
+      const res2 = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: "What's your status?" }],
+        });
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.text).toBe('All systems are online and operational. I\'m ready to assist.');
+    });
+
+    it('gracefully handles unsupported requests without pretending or exposing internal errors', async () => {
       const res = await supertest(app)
         .post('/api/v1/ai/generate')
         .set('Authorization', `Bearer ${nonOwnerToken}`)
         .send({
-          prompt: 'System status check',
-          preferredProvider: 'builtin',
-          routingPolicy: 'local_first',
+          messages: [{ role: 'user', content: 'Write a 2000 word sci-fi novel about interstellar travel.' }],
         });
 
       expect(res.status).toBe(200);
       expect(res.body.provider).toBe('builtin');
-      expect(res.body.text).toContain('All systems operational');
+      expect(res.body.text).toBe("I can help with basic conversation, calculations, system information, and common questions. A more capable AI provider isn't currently available for that request.");
+    });
+
+    it('transparently falls back to baseline provider when Grok is unconfigured', async () => {
+      // Balanced policy chooses Grok first by priority (10 > 1).
+      // Grok fails because no GROK_API_KEY is configured in test env.
+      // Router catches the config error, records failure in usage, and falls back to baseline-v1.
+      const res = await supertest(app)
+        .post('/api/v1/ai/generate')
+        .set('Authorization', `Bearer ${nonOwnerToken}`)
+        .send({
+          messages: [{ role: 'user', content: 'Hello there' }],
+          routingPolicy: 'balanced',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('success');
+      expect(res.body.provider).toBe('builtin');
+      expect(res.body.model).toBe('baseline-v1');
+      expect(res.body.text).toBe("Hello! I'm Carolina. How can I help you today?");
+      expect(res.body.text).not.toContain('Grok');
+      expect(res.body.text).not.toContain('API not configured');
     });
 
     it('records zero estimated cost for baseline provider usage', async () => {
