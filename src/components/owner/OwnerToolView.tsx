@@ -45,7 +45,7 @@ const INTELLIGENCE_TEST_CASES = [
   { id: 'class_calc', category: 'Classification', name: 'Calculation Classification', prompt: 'Calculate 100 / 4 + 15', expectedIntent: 'calculation', expectedComplexity: 'low' },
   { id: 'class_coding', category: 'Classification', name: 'Coding Classification', prompt: 'Write a Python program that reads a CSV and calculates the average of a column.', expectedIntent: 'coding', expectedComplexity: 'medium' },
   { id: 'class_creative', category: 'Classification', name: 'Creative Classification', prompt: 'Write a short poem about space exploration', expectedIntent: 'creative', expectedComplexity: 'medium' },
-  { id: 'class_system', category: 'Classification', name: 'System Classification', prompt: 'What models are currently available?', expectedIntent: 'system', expectedComplexity: 'low' },
+  { id: 'class_system', category: 'Classification', name: 'System Classification', prompt: 'What models are currently available?', expectedIntent: 'provider_management', expectedComplexity: 'low' },
 
   // Complexity
   { id: 'cmplx_low', category: 'Complexity', name: 'Low Complexity', prompt: 'Hi', expectedComplexity: 'low' },
@@ -54,15 +54,15 @@ const INTELLIGENCE_TEST_CASES = [
 
   // Routing
   { id: 'route_pref_avail', category: 'Routing', name: 'Preferred Provider Available', prompt: 'Hello Carolina', preferredProvider: 'builtin' },
-  { id: 'route_pref_unavail', category: 'Routing', name: 'Preferred Provider Unavailable', prompt: 'Write a script', preferredProvider: 'nonexistent_provider' },
+  { id: 'route_pref_unavail', category: 'Routing', name: 'Preferred Provider Unavailable', prompt: 'Write a script', preferredProvider: 'nonexistent_provider', expectControlledError: true },
   { id: 'route_provider_fallback', category: 'Routing', name: 'Provider Fallback', prompt: 'Explain quantum computing', preferredProvider: 'grok' },
-  { id: 'route_baseline_fallback', category: 'Routing', name: 'Baseline Fallback', prompt: 'Hi', preferredModel: 'baseline-v1' },
+  { id: 'route_baseline_fallback', category: 'Routing', name: 'Baseline Fallback', prompt: 'Hi', preferredModel: 'baseline-v1', preferredProvider: 'builtin' },
 
   // Safety
-  { id: 'safety_unk_prov', category: 'Safety', name: 'Unknown Provider', prompt: 'Test query', preferredProvider: 'unknown_provider_999' },
-  { id: 'safety_unk_model', category: 'Safety', name: 'Unknown Model', prompt: 'Test query', preferredModel: 'unknown_model_999' },
-  { id: 'safety_invalid_req', category: 'Safety', name: 'Invalid Request', prompt: '', rawBody: { messages: [] } },
-  { id: 'safety_unauth_owner', category: 'Safety', name: 'Unauthorized Owner Operation', prompt: 'Check owner vault', simulateNonOwner: true },
+  { id: 'safety_unk_prov', category: 'Safety', name: 'Unknown Provider', prompt: 'Test query', preferredProvider: 'unknown_provider_999', expectControlledError: true },
+  { id: 'safety_unk_model', category: 'Safety', name: 'Unknown Model', prompt: 'Test query', preferredModel: 'unknown_model_999', expectControlledError: true },
+  { id: 'safety_invalid_req', category: 'Safety', name: 'Invalid Request', prompt: '', rawBody: { messages: [] }, expectControlledError: true },
+  { id: 'safety_unauth_owner', category: 'Safety', name: 'Unauthorized Owner Operation', prompt: 'Check owner vault', simulateNonOwner: true, expectControlledError: true },
 ];
 
 export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
@@ -178,20 +178,102 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
       const latency = Math.round(performance.now() - start);
 
       if (res.ok) {
+        if (testCase.expectControlledError) {
+          setTestResults(prev => ({
+            ...prev,
+            [testCase.id]: {
+              status: 'error',
+              error: 'Expected controlled security or routing error, but request succeeded.',
+              text: data.text || 'Unexpected success response',
+              latencyMs: data.latencyMs || latency,
+              selectedProvider: data.provider || 'none',
+              selectedModel: data.model || 'none',
+              fallbackCount: data.orchestration?.fallbackCount || 0,
+            }
+          }));
+        } else {
+          // Check for intent or complexity mismatch if test specified expected values
+          const intentMismatch = testCase.expectedIntent && data.orchestration?.intent !== testCase.expectedIntent;
+          const complexityMismatch = testCase.expectedComplexity && data.orchestration?.complexity !== testCase.expectedComplexity;
+
+          if (intentMismatch || complexityMismatch) {
+            setTestResults(prev => ({
+              ...prev,
+              [testCase.id]: {
+                status: 'error',
+                error: `Validation mismatch: ${intentMismatch ? `Expected intent "${testCase.expectedIntent}" got "${data.orchestration?.intent}"` : ''} ${complexityMismatch ? `Expected complexity "${testCase.expectedComplexity}" got "${data.orchestration?.complexity}"` : ''}`,
+                detectedIntent: data.orchestration?.intent,
+                complexity: data.orchestration?.complexity,
+                selectedProvider: data.provider || 'none',
+                selectedModel: data.model || 'none',
+                fallbackCount: data.orchestration?.fallbackCount || 0,
+                latencyMs: data.latencyMs || latency,
+                text: data.text,
+              }
+            }));
+          } else {
+            const fallbacks = data.orchestration?.fallbackCount || 0;
+            const status = fallbacks > 0 ? 'fallback' : 'success';
+
+            setTestResults(prev => ({
+              ...prev,
+              [testCase.id]: {
+                status,
+                detectedIntent: data.orchestration?.intent,
+                complexity: data.orchestration?.complexity,
+                requiredCapabilities: data.orchestration?.requiredCapabilities,
+                selectedProvider: data.provider || 'builtin',
+                selectedModel: data.model || 'baseline-v1',
+                fallbackCount: fallbacks,
+                latencyMs: data.latencyMs || latency,
+                estimatedCost: data.usage?.estimatedCost || 0,
+                text: data.text,
+                events: data.orchestration?.events,
+              }
+            }));
+          }
+        }
+      } else {
+        if (testCase.expectControlledError) {
+          // Controlled safety / security error as expected
+          setTestResults(prev => ({
+            ...prev,
+            [testCase.id]: {
+              status: 'success',
+              controlledError: data.error || `HTTP ${res.status}`,
+              text: `[Controlled Security / Safety Check Passed]: ${data.error || `HTTP ${res.status} error`}`,
+              latencyMs: latency,
+              fallbackCount: 0,
+              selectedProvider: 'none',
+              selectedModel: 'none',
+            }
+          }));
+        } else {
+          setTestResults(prev => ({
+            ...prev,
+            [testCase.id]: {
+              status: 'error',
+              error: data.error || `HTTP ${res.status}`,
+              text: `[Error ${res.status}]: ${data.error || 'Request rejected by AI Router or security check'}`,
+              latencyMs: latency,
+              selectedProvider: 'none',
+              selectedModel: 'none',
+            }
+          }));
+        }
+      }
+    } catch (err: any) {
+      if (testCase.expectControlledError) {
         setTestResults(prev => ({
           ...prev,
           [testCase.id]: {
-            status: (data.orchestration?.fallbackCount && data.orchestration.fallbackCount > 0) ? 'fallback' : 'success',
-            detectedIntent: data.orchestration?.intent,
-            complexity: data.orchestration?.complexity,
-            requiredCapabilities: data.orchestration?.requiredCapabilities,
-            selectedProvider: data.provider,
-            selectedModel: data.model,
-            fallbackCount: data.orchestration?.fallbackCount || 0,
-            latencyMs: data.latencyMs || latency,
-            estimatedCost: data.usage?.estimatedCost || 0,
-            text: data.text,
-            events: data.orchestration?.events,
+            status: 'success',
+            controlledError: err.message,
+            text: `[Controlled Exception]: ${err.message}`,
+            latencyMs: Math.round(performance.now() - start),
+            fallbackCount: 0,
+            selectedProvider: 'none',
+            selectedModel: 'none',
           }
         }));
       } else {
@@ -199,22 +281,14 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
           ...prev,
           [testCase.id]: {
             status: 'error',
-            error: data.error || `HTTP ${res.status}`,
-            text: `[Error ${res.status}]: ${data.error || 'Request rejected by AI Router or security check'}`,
-            latencyMs: latency,
+            error: err.message,
+            text: `[Exception]: ${err.message}`,
+            latencyMs: Math.round(performance.now() - start),
+            selectedProvider: 'none',
+            selectedModel: 'none',
           }
         }));
       }
-    } catch (err: any) {
-      setTestResults(prev => ({
-        ...prev,
-        [testCase.id]: {
-          status: 'error',
-          error: err.message,
-          text: `[Exception]: ${err.message}`,
-          latencyMs: Math.round(performance.now() - start),
-        }
-      }));
     } finally {
       setActiveTestId(null);
     }
@@ -338,7 +412,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
                               </div>
                               <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
                                 <span className="text-slate-400 block text-[10px]">Provider / Model</span>
-                                <span className="font-semibold text-slate-800 dark:text-slate-200">{result.selectedProvider || 'builtin'} / {result.selectedModel || 'baseline-v1'}</span>
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">{result.selectedProvider ?? 'none'} / {result.selectedModel ?? 'none'}</span>
                               </div>
                               <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800">
                                 <span className="text-slate-400 block text-[10px]">Latency / Fallbacks</span>

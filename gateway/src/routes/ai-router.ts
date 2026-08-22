@@ -81,7 +81,7 @@ aiRouter.post('/generate', authenticate, async (req: Request, res: Response, nex
   } catch (err: any) {
     const statusCode = err?.statusCode || 500;
     const isClientError = statusCode === 400 || statusCode === 429;
-    const isSafeProviderError = statusCode === 503 && err.errorCode === 'PROVIDER_UNAVAILABLE';
+    const isSafeProviderError = statusCode === 503 && (err.errorCode === 'PROVIDER_UNAVAILABLE' || err.errorCode === 'NO_AVAILABLE_MODELS');
     const message = isClientError || isSafeProviderError
       ? err.message
       : 'Carolina is temporarily unable to process this request. Please try again shortly.';
