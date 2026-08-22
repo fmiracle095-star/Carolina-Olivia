@@ -6,6 +6,7 @@ import { AppShell } from "@/src/components/layout/AppShell";
 import { OwnerSidebar, OwnerToolTab } from "@/src/components/layout/OwnerSidebar";
 import { OwnerToolView } from "@/src/components/owner/OwnerToolView";
 import { useAuth } from '@/src/lib/AuthContext';
+import { apiFetch } from '@/src/lib/api';
 import { useRouter } from 'next/navigation';
 import NotFound from '@/src/app/not-found';
 import { motion, AnimatePresence } from 'motion/react';
@@ -19,7 +20,7 @@ interface Message {
 }
 
 function MellyContent() {
-  const { isOwner, user, loading } = useAuth();
+  const { isOwner, user, session, loading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<OwnerToolTab>('chat');
   const [rightMobileOpen, setRightMobileOpen] = useState(false);
@@ -49,9 +50,9 @@ function MellyContent() {
     return <NotFound />;
   }
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const content = textToSend || inputText;
-    if (!content.trim()) return;
+    if (!content.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -60,20 +61,69 @@ function MellyContent() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
     if (!textToSend) setInputText('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      setIsTyping(false);
+    try {
+      if (session?.access_token) {
+        const payloadMessages = currentMessages.map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text,
+        }));
+
+        const res = await apiFetch('/api/v1/ai/generate', session.access_token, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: payloadMessages,
+            routingPolicy: 'balanced',
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const carolinaMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            text: data.text || 'Received empty response from AI router.',
+            sender: 'carolina',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, carolinaMsg]);
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          const errMsg = errorData.error || `Carolina AI Router status: ${res.status}`;
+          const carolinaMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            text: `[System]: ${errMsg}`,
+            sender: 'carolina',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages(prev => [...prev, carolinaMsg]);
+        }
+      } else {
+        const carolinaMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Authentication required. Please log in as the verified Overseer.',
+          sender: 'carolina',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, carolinaMsg]);
+      }
+    } catch (err: any) {
       const carolinaMsg: Message = {
         id: (Date.now() + 1).toString(),
-        text: `Greetings, Overseer. Carolina neural core is active and authenticated with verified owner privileges (${user.id.substring(0, 8)}...). The live AI provider backend is currently awaiting API key provisioning in the environment settings. Once configured, full neural generation and model routing will engage automatically.`,
+        text: `[Connection Notice]: ${err?.message || 'Unable to connect to Gateway AI Router.'}`,
         sender: 'carolina',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, carolinaMsg]);
-    }, 1200);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -138,9 +188,9 @@ function MellyContent() {
                     <AlertCircle className="w-5 h-5" />
                   </div>
                   <div className="space-y-1">
-                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Carolina AI Platform Foundation (Phase 1)</h2>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Carolina Authoritative Neural Router (Phase 3A Active)</h2>
                     <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                      You are logged in as the verified Overseer. The Owner Panel and two-sidebar architecture are fully operational. Provider bindings and AI router protocols are awaiting API key provisioning.
+                      You are logged in as the verified Overseer. All messages are authenticated, authorized, and routed directly through Carolina's authoritative AI orchestration pipeline.
                     </p>
                   </div>
                 </div>

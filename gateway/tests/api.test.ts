@@ -28,12 +28,14 @@ describe('API Endpoints', () => {
     expect(res.status).toBe(400);
   });
   
-  it('Melly chat returns STANDBY status when unconfigured', async () => {
+  it('Melly chat routes through authoritative AI router', async () => {
     const res = await supertest(app).post('/api/v1/melly/chat')
       .set('Authorization', `Bearer ${token}`)
       .send({ message: 'hello' });
     expect(res.status).toBe(200);
-    expect(res.body.reply).toContain('AI Router is STANDBY. Provider adapters are NOT CONFIGURED.');
+    expect(res.body.status).toBe('success');
+    expect(res.body.reply).toBeDefined();
+    expect(res.body.reply).toContain('Carolina');
   });
 
   it('System status returns accurate unconfigured states', async () => {

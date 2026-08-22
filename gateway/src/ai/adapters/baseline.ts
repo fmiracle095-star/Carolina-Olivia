@@ -120,7 +120,12 @@ export class BaselineProviderAdapter implements ProviderAdapter {
       return "All systems are online and operational. I'm ready to assist.";
     }
 
-    // 12. Operations Assistance: Model & Provider queries
+    // 12. Privileged Owner Operations Notice
+    if (/\b(owner operation|overseer command|system audit|vault status|termux status|local agent status|owner vault|execute terminal|change a provider|modify system config|enable local agent|run terminal command|check my owner vault)\b/i.test(normalized)) {
+      return "Privileged owner operations (such as vault access, provider configuration, terminal execution, and system modifications) require explicit action via the protected Owner Tools interface.";
+    }
+
+    // 13. Operations Assistance: Model & Provider queries
     if (/\b(which\s+model|what\s+model|current\s+model)\b/i.test(normalized)) {
       return "I'm currently responding as Carolina Baseline v1.";
     }
