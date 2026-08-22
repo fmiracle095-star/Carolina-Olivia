@@ -138,48 +138,45 @@ export class DatabaseStore {
     };
     this.models.set(grokBetaModel.id, grokBetaModel);
 
-    const caps: ModelCapabilityRecord[] = [
-      {
+    const grokCapabilities = [
+      'chat.generate', 'chat.stream', 'knowledge', 'reasoning', 'coding', 'creative', 'translation', 'summarization', 'conversation'
+    ];
+    const baselineCapabilities = [
+      'chat.generate', 'conversation', 'calculation', 'system'
+    ];
+
+    const caps: ModelCapabilityRecord[] = [];
+
+    baselineCapabilities.forEach(cap => {
+      caps.push({
         id: crypto.randomUUID(),
         model_id: baselineModelId,
-        capability: 'chat.generate',
+        capability: cap,
         enabled: true,
         metadata: {},
         created_at: new Date().toISOString(),
-      },
-      {
+      });
+    });
+
+    grokCapabilities.forEach(cap => {
+      caps.push({
         id: crypto.randomUUID(),
         model_id: grok2ModelId,
-        capability: 'chat.generate',
+        capability: cap,
         enabled: true,
         metadata: {},
         created_at: new Date().toISOString(),
-      },
-      {
-        id: crypto.randomUUID(),
-        model_id: grok2ModelId,
-        capability: 'chat.stream',
-        enabled: true,
-        metadata: {},
-        created_at: new Date().toISOString(),
-      },
-      {
+      });
+      caps.push({
         id: crypto.randomUUID(),
         model_id: grokBetaModelId,
-        capability: 'chat.generate',
+        capability: cap,
         enabled: true,
         metadata: {},
         created_at: new Date().toISOString(),
-      },
-      {
-        id: crypto.randomUUID(),
-        model_id: grokBetaModelId,
-        capability: 'chat.stream',
-        enabled: true,
-        metadata: {},
-        created_at: new Date().toISOString(),
-      },
-    ];
+      });
+    });
+
     caps.forEach(c => this.capabilities.set(`${c.model_id}:${c.capability}`, c));
 
     const policies: RoutingPolicyRecord[] = [

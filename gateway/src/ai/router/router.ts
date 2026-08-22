@@ -14,6 +14,8 @@ import { taskAnalyzer } from '../orchestration/task-analyzer';
 import { executionPlanner } from '../orchestration/planner';
 import { orchestrationEvents } from '../orchestration/events';
 import { ExecutionPlan } from '../orchestration/types';
+import { responseValidator } from '../validation/validator';
+import { providerHealthTracker } from '../health/health-tracker';
 
 export interface RouterUserContext {
   userId: string;
@@ -62,7 +64,7 @@ export class AIRouter {
       throw err;
     }
 
-    // 3. Resolve Eligible Models and Providers using Execution Plan
+    // 3. Resolve Eligible Models and Providers using Execution Plan & Health Tracker
     const candidates = await this.resolveCandidates(request, capability, plan);
 
     if (candidates.length === 0) {
@@ -84,7 +86,7 @@ export class AIRouter {
       throw err;
     }
 
-    // 4. Attempt Execution with Controlled Fallback
+    // 4. Attempt Execution with Controlled Fallback & Response Validation
     let lastError: any = null;
     let fallbackCount = 0;
 
@@ -116,6 +118,26 @@ export class AIRouter {
         });
 
         const attemptLatency = Math.round(performance.now() - attemptStart);
+
+        // Response Validation
+        const validation = responseValidator.validate(response);
+        if (!validation.isValid) {
+          providerHealthTracker.recordFailure(provider.slug, 500, 'INVALID_RESPONSE', validation.reason);
+          await usageService.recordUsage({
+            userId: context.userId,
+            conversationId: request.conversationId,
+            providerId: provider.id,
+            modelId: model.id,
+            capability,
+            requestId,
+            latencyMs: attemptLatency,
+            status: 'failed',
+            errorCode: 'INVALID_RESPONSE',
+            metadata: { reason: validation.reason, provider: provider.slug, model: model.model_identifier },
+          });
+          continue; // Try next candidate
+        }
+
         const inputTokens = response.usage?.inputTokens ?? 0;
         const outputTokens = response.usage?.outputTokens ?? 0;
         const totalTokens = response.usage?.totalTokens ?? (inputTokens + outputTokens);
@@ -124,6 +146,9 @@ export class AIRouter {
         const inputCost = (model.input_cost ?? 0) * (inputTokens / 1000);
         const outputCost = (model.output_cost ?? 0) * (outputTokens / 1000);
         const estimatedCost = Number((inputCost + outputCost).toFixed(6));
+
+        // Update Provider Health Success
+        providerHealthTracker.recordSuccess(provider.slug, attemptLatency);
 
         // Record successful usage
         await usageService.recordUsage({
@@ -156,6 +181,7 @@ export class AIRouter {
 
         return {
           ...response,
+          text: validation.sanitizedText || response.text,
           requestId,
           provider: provider.slug,
           model: model.model_identifier,
@@ -173,6 +199,9 @@ export class AIRouter {
         const attemptLatency = Math.round(performance.now() - attemptStart);
         const statusCode = (err as any)?.statusCode || 500;
         const errorCode = (err as any)?.errorCode || 'EXECUTION_FAILED';
+
+        // Record failure in Provider Health Tracker
+        providerHealthTracker.recordFailure(provider.slug, statusCode, errorCode, err?.message);
 
         // Record failed attempt in usage telemetry
         await usageService.recordUsage({
@@ -198,7 +227,36 @@ export class AIRouter {
 
     orchestrationEvents.emit(requestId, 'FAILED', { message: 'All candidate model providers failed' });
 
-    // All candidates failed
+    // Try baseline provider as absolute final safety fallback if not already executed
+    const baselineAdapter = adapterRegistry.get('builtin');
+    if (baselineAdapter) {
+      try {
+        const fallbackRes = await baselineAdapter.generate({
+          ...request,
+          model: 'baseline-v1',
+          requestId,
+          capability,
+        });
+        return {
+          ...fallbackRes,
+          requestId,
+          provider: 'builtin',
+          model: 'baseline-v1',
+          orchestration: {
+            intent: analysis.intent,
+            complexity: analysis.complexity,
+            requiredCapabilities: analysis.requiredCapabilities,
+            executionPlan: plan,
+            fallbackCount: fallbackCount + 1,
+            events: orchestrationEvents.getEventsForRequest(requestId),
+          },
+        };
+      } catch {
+        // Fallthrough
+      }
+    }
+
+    // All candidates and baseline failed
     const finalErr = new Error('Carolina is temporarily unable to process this request. Please try again shortly.');
     (finalErr as any).statusCode = 503;
     (finalErr as any).errorCode = 'PROVIDER_UNAVAILABLE';
