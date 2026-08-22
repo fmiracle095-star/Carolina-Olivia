@@ -169,11 +169,12 @@ export class TaskAnalyzer {
   }
 
   private isConversation(text: string): boolean {
-    // Greetings, Identity, How are you, Goodbyes, Thanks, Ok
+    // Greetings, Identity, How are you, Goodbyes, Thanks, Ok, Date/Time
     if (/^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening)|yo|howdy)\b/i.test(text)) return true;
     if (/\b(who\s+are\s+you|what\s+are\s+you|what\s+is\s+carolina|tell\s+me\s+about\s+yourself|introduce\s+yourself|what\s+is\s+your\s+purpose|your\s+name|how\s+are\s+you|what's\s+up|whats\s+up|sup)\b/i.test(text)) return true;
     if (/\b(thanks|thank\s+you|goodbye|bye|ok|okay|sounds\s+good)\b/i.test(text)) return true;
     if (/^(help|help\s+me)$/i.test(text)) return true;
+    if (/\b(what(?:'s|\s+is)\s+(?:the\s+)?(?:current\s+)?(?:date|time)|what\s+time\s+is\s+it|today(?:'s)?\s+date|current\s+date|current\s+time|what\s+day\s+is\s+it)\b/i.test(text)) return true;
     return false;
   }
 

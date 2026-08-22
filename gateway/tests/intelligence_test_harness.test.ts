@@ -34,6 +34,8 @@ describe('Phase 3B — Dynamic Intelligence Test Harness Validation', () => {
       const yearStr = now.getUTCFullYear().toString();
       expect(res.body.text).toContain(yearStr);
       expect(res.body.text).toMatch(/(Today|date|time)/i);
+      expect(res.body.orchestration.intent).toBe('conversation');
+      expect(res.body.orchestration.complexity).toBe('low');
     });
   });
 

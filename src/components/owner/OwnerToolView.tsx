@@ -36,7 +36,7 @@ const INTELLIGENCE_TEST_CASES = [
   // Basic
   { id: 'basic_greeting', category: 'Basic', name: 'Greeting', prompt: 'Hi', expectedIntent: 'conversation', expectedComplexity: 'low' },
   { id: 'basic_identity', category: 'Basic', name: 'Identity', prompt: 'What is Carolina?', expectedIntent: 'conversation', expectedComplexity: 'low' },
-  { id: 'basic_datetime', category: 'Basic', name: 'Date/time', prompt: 'What is the current date and time?', expectedIntent: 'conversation', expectedComplexity: 'low' },
+  { id: 'basic_datetime', category: 'Basic', name: 'Date/time', prompt: 'What is the current date and time?', expectedIntent: 'knowledge', expectedComplexity: 'low' },
   { id: 'basic_arithmetic', category: 'Basic', name: 'Arithmetic', prompt: 'What is 27 × 14?', expectedIntent: 'calculation', expectedComplexity: 'low' },
 
   // Classification
@@ -182,7 +182,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
           setTestResults(prev => ({
             ...prev,
             [testCase.id]: {
-              status: 'error',
+              status: 'fail',
               error: 'Expected controlled security or routing error, but request succeeded.',
               text: data.text || 'Unexpected success response',
               latencyMs: data.latencyMs || latency,
@@ -200,7 +200,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
             setTestResults(prev => ({
               ...prev,
               [testCase.id]: {
-                status: 'error',
+                status: 'fail',
                 error: `Validation mismatch: ${intentMismatch ? `Expected intent "${testCase.expectedIntent}" got "${data.orchestration?.intent}"` : ''} ${complexityMismatch ? `Expected complexity "${testCase.expectedComplexity}" got "${data.orchestration?.complexity}"` : ''}`,
                 detectedIntent: data.orchestration?.intent,
                 complexity: data.orchestration?.complexity,
@@ -213,7 +213,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
             }));
           } else {
             const fallbacks = data.orchestration?.fallbackCount || 0;
-            const status = fallbacks > 0 ? 'fallback' : 'success';
+            const status = fallbacks > 0 ? 'fallback' : 'pass';
 
             setTestResults(prev => ({
               ...prev,
@@ -239,7 +239,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
           setTestResults(prev => ({
             ...prev,
             [testCase.id]: {
-              status: 'success',
+              status: 'expected_error',
               controlledError: data.error || `HTTP ${res.status}`,
               text: `[Controlled Security / Safety Check Passed]: ${data.error || `HTTP ${res.status} error`}`,
               latencyMs: latency,
@@ -252,7 +252,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
           setTestResults(prev => ({
             ...prev,
             [testCase.id]: {
-              status: 'error',
+              status: 'fail',
               error: data.error || `HTTP ${res.status}`,
               text: `[Error ${res.status}]: ${data.error || 'Request rejected by AI Router or security check'}`,
               latencyMs: latency,
@@ -267,7 +267,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
         setTestResults(prev => ({
           ...prev,
           [testCase.id]: {
-            status: 'success',
+            status: 'expected_error',
             controlledError: err.message,
             text: `[Controlled Exception]: ${err.message}`,
             latencyMs: Math.round(performance.now() - start),
@@ -280,7 +280,7 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
         setTestResults(prev => ({
           ...prev,
           [testCase.id]: {
-            status: 'error',
+            status: 'fail',
             error: err.message,
             text: `[Exception]: ${err.message}`,
             latencyMs: Math.round(performance.now() - start),
@@ -377,11 +377,17 @@ export function OwnerToolView({ tab }: { tab: OwnerToolTab }) {
                                 <span>{testCase.name}</span>
                                 {result && (
                                   <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                                    result.status === 'success' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                                    result.status === 'error' ? 'bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400' :
-                                    'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400'
+                                    (result.status === 'pass' || result.status === 'success') ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                                    result.status === 'expected_error' ? 'bg-sky-100 text-sky-800 dark:bg-sky-500/10 dark:text-sky-400' :
+                                    result.status === 'fallback' ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-400' :
+                                    'bg-rose-100 text-rose-800 dark:bg-rose-500/10 dark:text-rose-400'
                                   }`}>
-                                    {result.status.toUpperCase()}
+                                    {
+                                      result.status === 'pass' || result.status === 'success' ? 'PASS' :
+                                      result.status === 'expected_error' ? 'EXPECTED ERROR' :
+                                      result.status === 'fallback' ? 'FALLBACK' :
+                                      'FAIL'
+                                    }
                                   </span>
                                 )}
                               </div>
